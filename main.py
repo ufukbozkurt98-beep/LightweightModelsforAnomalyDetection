@@ -1,0 +1,11 @@
+# This is a sample Python script.
+
+# Press ⌃R to execute it or replace it with your code.
+# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+
+
+from utils.mvtec_extract import ensure_extracted
+
+TAR_PATH = "./data/mvtec_anomaly_detection.tar.xz"
+MVTec_ROOT = "./data/MVTec-AD"
+data_root = ensure_extracted(TAR_PATH, MVTec_ROOT)
