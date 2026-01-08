@@ -181,7 +181,7 @@ def run_task1(mvtec_root: Path, out_dir: Path, category: Optional[str], val_rati
         #count the issues and print a one line status check for a quick control
         issue_counts = {k: len(v) for k, v in report["issues"].items()}
         print(
-            f"✅ {cat_dir.name}: train={len(train_list)} val={len(val_list)} | counts={report['counts']} | issues={issue_counts}")
+            f"{cat_dir.name}: train={len(train_list)} val={len(val_list)} | counts={report['counts']} | issues={issue_counts}")
 
     # Save one big json file that contains all reports and print where the summary is saved
     (out_dir / "mvtec_all_reports.json").write_text(json.dumps(all_reports, indent=2))
