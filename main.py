@@ -35,7 +35,7 @@ def main():
     b = next(iter(train_loader))
     print("TRAIN shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
 
-    b = next(iter(train_loader))
+    b = next(iter(val_loader))
     print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
 
     b = next(iter(test_loader))
