@@ -5,7 +5,7 @@ from configs.config import (
 )
 
 from utils.mvtec_extract import ensure_extracted
-from utils.data_check_and_split import run_task1
+from utils.data_check_and_split import scan_and_split
 from utils.data_loader import make_loader_mvtec_ad
 
 
@@ -16,7 +16,7 @@ def main():
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    run_task1(
+    scan_and_split(
         mvtec_root=Path(data_root),
         out_dir=REPORTS_DIR,
         category=CATEGORY,  # None =  all categories
@@ -42,6 +42,7 @@ def main():
     print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
     print("TEST defect types sample:", b["defect_type"][:4])
 
+    # confirm at least one mask is non-zero in an anomaly batch
     mask_sums = b["mask"].sum(dim=(1, 2, 3))
     print("Mask sums (per sample):", mask_sums.tolist())
 

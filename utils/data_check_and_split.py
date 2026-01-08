@@ -139,7 +139,7 @@ def make_train_val_split(train_good_dir: Path, val_ratio: float, seed: int, root
     return train, val  #return both train and val image(path) lists
 
 
-def run_task1(mvtec_root: Path, out_dir: Path, category: Optional[str], val_ratio: float, seed: int):
+def scan_and_split(mvtec_root: Path, out_dir: Path, category: Optional[str], val_ratio: float, seed: int):
     # if category is not given, iterate and append all the category paths in MVTec AD dataset into the categories list
     if category is None:
         categories = [d for d in sorted(mvtec_root.iterdir()) if (

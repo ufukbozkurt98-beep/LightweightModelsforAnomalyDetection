@@ -5,14 +5,10 @@ from torch.utils.data import DataLoader
 from utils.transform_config import TransformConfig
 from utils.mvtecAD_dataset import MVTecADDataset
 
-from configs.config import (
-    IMAGE_INPUT_SIZE, BATCH_SIZE, NUM_WORKERS
-)
-
 
 def make_loader_mvtec_ad(mvtec_root: Path, category: str, mode: str, split_json: Path,
-                         input_size: int = IMAGE_INPUT_SIZE, batch_size: int = BATCH_SIZE,
-                         num_workers: int = NUM_WORKERS,
+                         input_size: int = 256, batch_size: int = 16,
+                         num_workers: int = 2,
                          normalize: bool = True):
     tcfg = TransformConfig(input_size=input_size, normalize=normalize)  # creating a config object for transforms
     # creating dataset object to store parameters and build self.samples by scanning json (train/val) or folders (test)
