@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Tuple
 from PIL import Image, UnidentifiedImageError
 
 
-
 # This function gets a folder path and returns a list of paths that are every .png files in the folder in a sorted way
 # Sorting is to ensure that we don't get different file ordering at each run
 def list_pngs(folder: Path) -> List[Path]:
@@ -50,7 +49,7 @@ def scan_category(cat_dir: Path) -> Dict:  # Cat_dir represents the category dir
         if not p.exists():
             raise FileNotFoundError(f"Missing folder: {p}")
 
-    # Recording the perfromed checks in a dictionary for each category
+    # Recording the performed checks in a dictionary for each category
     report = {
         "category": cat_dir.name,  #cat_dir.name gets the folder name, 'bottle' as an example
         "counts": {"train_good": 0, "test_good": 0, "test_anomaly": 0},
@@ -59,7 +58,7 @@ def scan_category(cat_dir: Path) -> Dict:  # Cat_dir represents the category dir
             "unreadable_images": [],  #recording the img files that cannot be read/corrupted
             "missing_masks": [],  #recording anomalous images that do not have masks
             "unreadable_masks": [],  #recording corrupted masks
-            "mask_size_mismatch": [],  #recording the masks that has diffrent size than the image
+            "mask_size_mismatch": [],  #recording the masks that has different size than the image
         },
     }
 
@@ -72,11 +71,13 @@ def scan_category(cat_dir: Path) -> Dict:  # Cat_dir represents the category dir
             report["issues"]["unreadable_images"].append(
                 p.as_posix())  #posix converts the path to string for it to be added to the report dictionary
 
-    # test (good + anomalies)
+    # test (good + anomalies) Iterating through each folder inside test/ in sorted way. Example: [
+    # .../category/test/broken_large, .../category/test/broken_small, .../category/test/contamination,
+    # .../category/test/good]
     for defect_dir in sorted([d for d in test_dir.iterdir() if
-                              d.is_dir()]):  # Iterating through each folder inside test/ in sorted way. Example: [.../category/test/broken_large, .../category/test/broken_small, .../category/test/contamination, .../category/test/good]
-
-        defect_type = defect_dir.name  # Gets the name(label) of the defect(defect type or 'good' in our case) for the later counts
+                              d.is_dir()]):
+        # Gets the name(label) of the defect(defect type or 'good' in our case) for the later counts
+        defect_type = defect_dir.name
 
         for img_path in list_pngs(defect_dir):  #iterate through all images in the respected label folder of test
 
@@ -97,12 +98,12 @@ def scan_category(cat_dir: Path) -> Dict:  # Cat_dir represents the category dir
 
             # The case where mask for the anomalous image does not exist
             if mask_path is None:
-                # record the expected path so it's clear what's missing
+                # record the expected path, so it's clear what's missing
                 expected = (gt_dir / defect_type / f"{img_path.stem}_mask.png").as_posix()
                 report["issues"]["missing_masks"].append(expected)
                 continue
 
-            # The case where the mask for the anomalous image is corrupted/unable to be pened
+            # The case where the mask for the anomalous image is corrupted/unable to be opened
             mask_size = try_open_image(mask_path, "L")
             if mask_size is None:
                 report["issues"]["unreadable_masks"].append(mask_path.as_posix())
@@ -124,44 +125,49 @@ def make_train_val_split(train_good_dir: Path, val_ratio: float, seed: int, root
     rng = random.Random(seed)  #always producing the same random order when the same seed is used
     imgs = list_pngs(train_good_dir)  #list of all training images in the category (a sorted list of Paths)
 
-    #separating the root from the image path to be able to work outside of drive
-    #Example: /content/drive/MyDrive/datasets/mvtec_ad/bottle/train/good/000.png  to  bottle/train/good/000.png
-    #record these nre relative paths in a list
+    # separating the root from the image path to be able to work outside of drive
+    # Example: /content/drive/MyDrive/datasets/mvtec_ad/bottle/train/good/000.png  to  bottle/train/good/000.png
+    # record these nre relative paths in a list
     rel_paths = [p.relative_to(root).as_posix() for p in imgs]
     rng.shuffle(rel_paths)  #reproducable random shuffle of the relative image paths
 
+    # determining the number of the validation images according to the validation_ratio that is defined at the beginning
     n_val = int(
-        len(rel_paths) * val_ratio)  #determining the number of the validation images according to the validation_ratio that is defined at the beginning
-    val = sorted(rel_paths[:n_val])  #take the first n_val items from the shuffeld relative path list as validation
+        len(rel_paths) * val_ratio)
+    val = sorted(rel_paths[:n_val])  #take the first n_val items from the shuffled relative path list as validation
     train = sorted(rel_paths[n_val:])  #rest of the list stays as training images
     return train, val  #return both train and val image(path) lists
 
 
 def run_task1(mvtec_root: Path, out_dir: Path, category: Optional[str], val_ratio: float, seed: int):
+    # if category is not given, iterate and append all the category paths in MVTec AD dataset into the categories list
     if category is None:
         categories = [d for d in sorted(mvtec_root.iterdir()) if (
-                d / "train").exists()]  #if category is not given, iterate and append all the category paths in MVTec AD dataset into the categories list
+                d / "train").exists()]
+    # if not, get the category specified. As an example, the list will be looking like: [Path(".../mvtec_ad/bottle")]
     else:
         categories = [
-            mvtec_root / category]  #if not, get the category specified. As an example, the list will be looking like: [Path(".../mvtec_ad/bottle")]
+            mvtec_root / category]
 
     all_reports = {}  #empty dictionary that will be used to collect the reports for all categories in one place
 
     for cat_dir in categories:
+        # skip the checks and splits in the case of it is not a category folder with training images
         if not (
-                cat_dir / "train").exists():  #skip the checks and splits in the case of it is not a category folder with training images
+                cat_dir / "train").exists():
             continue
 
         report = scan_category(
             cat_dir)  #perform all the checks for the respected category, returns the report dictionary
+        # add the resulted dictionary in the all_reports dictionary to collect all category results in one place
         all_reports[
-            cat_dir.name] = report  #add the resulted dictionary in the all_reports dictionary to collect all category results in one place
+            cat_dir.name] = report
 
-        #perfroming the validation set split
+        # performing the validation set split
         train_good_dir = cat_dir / "train" / "good"
         train_list, val_list = make_train_val_split(train_good_dir, val_ratio, seed, mvtec_root)
 
-        #create the split dictionary that holds all the seperation info
+        # create the split dictionary that holds all the separation info
         split = {
             "category": cat_dir.name,
             "seed": seed,
@@ -170,18 +176,19 @@ def run_task1(mvtec_root: Path, out_dir: Path, category: Optional[str], val_rati
             "val": val_list,
         }
 
-        #creating output paths for split and report json files that will be created for the category
+        # creating output paths for split and report json files that will be created for the category
         split_path = out_dir / f"mvtec_{cat_dir.name}_split.json"
         report_path = out_dir / f"mvtec_{cat_dir.name}_report.json"
 
-        #saving split and report dictionaries as json files
+        # saving split and report dictionaries as json files
         split_path.write_text(json.dumps(split, indent=2))
         report_path.write_text(json.dumps(report, indent=2))
 
-        #count the issues and print a one line status check for a quick control
+        # count the issues and print a one line status check for a quick control
         issue_counts = {k: len(v) for k, v in report["issues"].items()}
         print(
-            f"{cat_dir.name}: train={len(train_list)} val={len(val_list)} | counts={report['counts']} | issues={issue_counts}")
+            f"{cat_dir.name}: train={len(train_list)} val={len(val_list)} "
+            f"| counts={report['counts']} | issues={issue_counts}")
 
     # Save one big json file that contains all reports and print where the summary is saved
     (out_dir / "mvtec_all_reports.json").write_text(json.dumps(all_reports, indent=2))

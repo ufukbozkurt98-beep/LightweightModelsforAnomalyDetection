@@ -1,25 +1,50 @@
-# This is a sample Python script.
-
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
-
 from pathlib import Path
 
-from utils.mvtec_extract import ensure_extracted
-from utils.data_cleaning_check import run_task1
-
-TAR_PATH = "./data/mvtec_anomaly_detection.tar.xz"
-MVTec_ROOT = "./data/MVTec-AD"
-
-data_root = ensure_extracted(TAR_PATH, MVTec_ROOT)
-
-out_dir = Path("./data/reports")
-out_dir.mkdir(parents=True, exist_ok=True)
-
-run_task1(
-    mvtec_root=Path(data_root),
-    out_dir=out_dir,
-    category= 'bottle',   # None =  all categories
-    val_ratio=0.2,
-    seed=42
+from configs.config import (
+    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH
 )
+
+from utils.mvtec_extract import ensure_extracted
+from utils.data_check_and_split import run_task1
+from utils.data_loader import make_loader_mvtec_ad
+
+
+def main():
+    tar_path = TAR_PATH
+
+    data_root = ensure_extracted(tar_path, str(MVTEC_ROOT))
+
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    run_task1(
+        mvtec_root=Path(data_root),
+        out_dir=REPORTS_DIR,
+        category=CATEGORY,  # None =  all categories
+        val_ratio=VAL_RATIO,
+        seed=SEED
+    )
+
+    train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
+                                        batch_size=BATCH_SIZE)
+    val_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
+                                      batch_size=BATCH_SIZE)
+    test_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
+                                       batch_size=BATCH_SIZE)
+
+    print(len(val_loader.dataset))
+    b = next(iter(train_loader))
+    print("TRAIN shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
+
+    b = next(iter(train_loader))
+    print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
+
+    b = next(iter(test_loader))
+    print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
+    print("TEST defect types sample:", b["defect_type"][:4])
+
+    mask_sums = b["mask"].sum(dim=(1, 2, 3))
+    print("Mask sums (per sample):", mask_sums.tolist())
+
+
+if __name__ == "__main__":
+    main()
