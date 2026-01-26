@@ -3,7 +3,7 @@ from pathlib import Path
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-CATEGORY = "bottle"
+CATEGORY = "capsule"
 VAL_RATIO = 0.2
 SEED = 42
 BATCH_SIZE = 16
