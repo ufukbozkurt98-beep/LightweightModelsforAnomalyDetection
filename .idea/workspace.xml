@@ -5,16 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="53e2a920-f20c-4546-92a1-7fb353a9c20c" name="Changes" comment="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
-      <change afterPath="$PROJECT_DIR$/methods/cflow_freia.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/methods/cflow_method.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/utils/eval_metrics.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/utils/feature_extractor.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/utils/cflow_utils.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/data_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/data_loader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/image_mask_transform.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/image_mask_transform.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/transform_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/transform_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/methods/cflow_freia.py" beforeDir="false" afterPath="$PROJECT_DIR$/methods/cflow_freia.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/methods/cflow_method.py" beforeDir="false" afterPath="$PROJECT_DIR$/methods/cflow_method.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -29,6 +25,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -57,14 +58,14 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/ufuk/PycharmProjects/LightweightModelsforAnomalyDetection/utils&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.main.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "test",
+    "last_opened_file_path": "/Users/ufuk/PycharmProjects/LightweightModelsforAnomalyDetection/utils"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/utils" />
@@ -95,6 +96,7 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.main" />
         <item itemvalue="Python.main" />
       </list>
     </recent_temporary>

@@ -125,9 +125,10 @@ def main():
         "coupling_blocks": 8,
         "condition_vec": 128,
         "clamp_alpha": 1.9,
-        "fiber_batch": 4096,
+        "N": 256,  # ORIJINAL CFLOW-AD
         "lr": 2e-4,
     }
+
     if DO_TUNE:
         best_cfg = tune_hparams(train_loader, val_loader, device, backbone_name=backbone_name)
     else:
@@ -146,10 +147,15 @@ def main():
         coupling_blocks=best_cfg["coupling_blocks"],
         condition_vec=best_cfg["condition_vec"],
         clamp_alpha=best_cfg["clamp_alpha"],
-        fiber_batch=best_cfg["fiber_batch"],
+        lr=best_cfg["lr"],
+        meta_epochs=25,
+        sub_epochs=8,
+        N=best_cfg["N"],
+        input_size=IMAGE_INPUT_SIZE,
     )
 
-    cflow.fit(train_loader, epochs=100, lr=best_cfg["lr"])
+    cflow.fit(train_loader)
+
 
     img_thr = None
     pix_thr = None

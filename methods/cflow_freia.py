@@ -1,77 +1,99 @@
 # methods/cflow_freia.py
 import math
 import torch
-import torch.nn as nn
-from FrEIA.framework import SequenceINN
-from FrEIA.modules import AllInOneBlock
+from torch import nn
+
+# FrEIA (https://github.com/VLL-HD/FrEIA/)
+import FrEIA.framework as Ff
+import FrEIA.modules as Fm
 
 
-def positionalencoding2d(d_model: int, height: int, width: int) -> torch.Tensor:
+def positionalencoding2d(D, H, W):
     """
-    2D sinusoidal positional encoding.
-    Returns: (d_model, height, width)
+    :param D: dimension of the model
+    :param H: H of the positions
+    :param W: W of the positions
+    :return: DxHxW position matrix
     """
-    if d_model % 4 != 0:
-        raise ValueError("condition_vec (d_model) must be divisible by 4.")
-
-    pe = torch.zeros(d_model, height, width)
-
-    half = d_model // 2
-    div_term = torch.exp(torch.arange(0, half, 2, dtype=torch.float) * (-math.log(10000.0) / half))
-
-    pos_w = torch.arange(0, width, dtype=torch.float).unsqueeze(1)   # (W,1)
-    pos_h = torch.arange(0, height, dtype=torch.float).unsqueeze(1)  # (H,1)
-
-    # width encoding
-    pe[0:half:2, :, :] = torch.sin(pos_w * div_term).T.unsqueeze(1).repeat(1, height, 1)
-    pe[1:half:2, :, :] = torch.cos(pos_w * div_term).T.unsqueeze(1).repeat(1, height, 1)
-
-    # height encoding
-    pe[half::2, :, :] = torch.sin(pos_h * div_term).T.unsqueeze(2).repeat(1, 1, width)
-    pe[half + 1::2, :, :] = torch.cos(pos_h * div_term).T.unsqueeze(2).repeat(1, 1, width)
-
-    return pe
+    if D % 4 != 0:
+        raise ValueError(
+            "Cannot use sin/cos positional encoding with odd dimension (got dim={:d})".format(D)
+        )
+    P = torch.zeros(D, H, W)
+    # Each dimension use half of D
+    D = D // 2
+    div_term = torch.exp(torch.arange(0.0, D, 2) * -(math.log(1e4) / D))
+    pos_w = torch.arange(0.0, W).unsqueeze(1)
+    pos_h = torch.arange(0.0, H).unsqueeze(1)
+    P[0:D:2, :, :] = torch.sin(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, H, 1)
+    P[1:D:2, :, :] = torch.cos(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, H, 1)
+    P[D::2, :, :] = torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, W)
+    P[D + 1::2, :, :] = torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, W)
+    return P
 
 
-def _subnet_fc(c_in: int, c_out: int) -> nn.Module:
-    """
-    Small MLP used inside coupling blocks.
-    """
-    hidden = max(64, 2 * c_in)
+def subnet_fc(dims_in, dims_out):
+    # ORIJINAL CFLOW-AD
     return nn.Sequential(
-        nn.Linear(c_in, hidden),
-        nn.ReLU(inplace=True),
-        nn.Linear(hidden, hidden),
-        nn.ReLU(inplace=True),
-        nn.Linear(hidden, c_out),
+        nn.Linear(dims_in, 2 * dims_in),
+        nn.ReLU(),
+        nn.Linear(2 * dims_in, dims_out),
     )
 
 
-def freia_cflow_head(n_feat: int, n_coupling_blocks: int = 8, clamp: float = 1.9, cond_dim: int = 128) -> SequenceINN:
-    """
-    Build a conditional normalizing flow (FrEIA SequenceINN).
-
-    Input: x (E, n_feat)
-    Condition: c (E, cond_dim)
-    """
-    inn = SequenceINN(n_feat)
-    for _ in range(n_coupling_blocks):
-        inn.append(
-            AllInOneBlock,
-            subnet_constructor=_subnet_fc,
-            affine_clamping=clamp,
-            cond=0,
-            cond_shape=(cond_dim,),
+def freia_flow_head(c, n_feat):
+    coder = Ff.SequenceINN(n_feat)
+    print("NF coder:", n_feat)
+    for _k in range(c.coupling_blocks):
+        coder.append(
+            Fm.AllInOneBlock,
+            subnet_constructor=subnet_fc,
+            affine_clamping=c.clamp_alpha,
+            global_affine_type="SOFTPLUS",
+            permute_soft=True,
         )
-    return inn
+    return coder
 
 
-def get_logp(C: int, z: torch.Tensor, log_jac_det: torch.Tensor) -> torch.Tensor:
-    """
-    Standard normal log prob with jacobian correction.
-    z: (E, C)
-    log_jac_det: (E,)
-    returns: (E,)
-    """
-    log_base = -0.5 * (z.pow(2).sum(dim=1) + C * math.log(2 * math.pi))
-    return log_base + log_jac_det
+def freia_cflow_head(c, n_feat):
+    n_cond = c.condition_vec
+    coder = Ff.SequenceINN(n_feat)
+    print("CNF coder:", n_feat)
+    for _k in range(c.coupling_blocks):
+        coder.append(
+            Fm.AllInOneBlock,
+            cond=0,
+            cond_shape=(n_cond,),
+            subnet_constructor=subnet_fc,
+            affine_clamping=c.clamp_alpha,
+            global_affine_type="SOFTPLUS",
+            permute_soft=True,
+        )
+    return coder
+
+
+def load_decoder_arch(c, dim_in):
+    if c.dec_arch == "freia-flow":
+        decoder = freia_flow_head(c, dim_in)
+    elif c.dec_arch == "freia-cflow":
+        decoder = freia_cflow_head(c, dim_in)
+    else:
+        raise NotImplementedError("{} is not supported NF!".format(c.dec_arch))
+    return decoder
+
+
+# ---- ORIJINAL global activation dict (hook yerine wrapper dolduracak) ----
+activation = {}
+
+
+# ---- ORIJINAL utils.get_logp ----
+_GCONST_ = -0.9189385332046727  # ln(sqrt(2*pi))
+
+
+def t2np(tensor):
+    return tensor.cpu().data.numpy() if tensor is not None else None
+
+
+def get_logp(C, z, logdet_J):
+    logp = C * _GCONST_ - 0.5 * torch.sum(z**2, 1) + logdet_J
+    return logp
