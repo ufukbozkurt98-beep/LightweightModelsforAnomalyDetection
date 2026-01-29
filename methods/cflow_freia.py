@@ -1,4 +1,3 @@
-# methods/cflow_freia.py
 import math
 import torch
 from torch import nn
