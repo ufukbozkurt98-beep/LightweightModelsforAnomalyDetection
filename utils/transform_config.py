@@ -11,7 +11,7 @@ from configs.config import (
 class TransformConfig:
     input_size: int = IMAGE_INPUT_SIZE  # model will receive images of size 256×256
     normalize: bool = True  # apply ImageNet normalization by default
-    rotate_deg: float = 0.0 # for train augmentation
+    rotate_deg: float = 5.0  # for train augmentation
 
 
 # resizing the image without breaking its ratio as an example, if the image is 700x700, scale = 0.3657.
