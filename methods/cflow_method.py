@@ -2,11 +2,9 @@ import math
 import numpy as np
 import torch
 import torch.nn.functional as F
-from methods.cflow_freia import load_decoder_arch, positionalencoding2d, activation, get_logp, t2np
+from methods.cflow_freia import load_decoder_arch, activation
 from utils.cflow_utils import train_meta_epoch, test_meta_epoch
-
-gamma = 0.0
-theta = torch.nn.Sigmoid()
+from utils.data_adapters import TupleLoader
 
 
 class TimmActivationEncoder(torch.nn.Module):
@@ -29,31 +27,6 @@ class TimmActivationEncoder(torch.nn.Module):
         activation[self.pool_layers[1]] = feats["l2"].detach()
         activation[self.pool_layers[2]] = feats["l3"].detach()
         return feats
-
-
-class TupleLoader:
-    """
-    Wraps a loader and always yields (image, label, mask).
-    If the loader returns a dict, it is converted to this tuple format.
-    """
-
-    def __init__(self, loader):
-        self.loader = loader  # Store the original DataLoader
-
-    def __len__(self):
-        return len(self.loader)  # Return the number of batches in the original loader.
-
-    def __iter__(self):
-        for batch in self.loader:
-            # If the batch is a dict, convert it to (image, label, mask)
-            if isinstance(batch, dict):
-                image = batch["image"]
-                label = batch.get("label", torch.zeros(image.size(0), dtype=torch.long))
-                mask = batch.get("mask", torch.zeros(image.size(0), 1, image.size(2), image.size(3)))
-                yield image, label, mask
-            # If it is already a tuple, return it as-is
-            else:
-                yield batch
 
 
 class _C:

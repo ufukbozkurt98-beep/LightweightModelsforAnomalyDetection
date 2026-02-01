@@ -1,3 +1,10 @@
+"""
+CFLOW Decoder Architecture using FrEIA.
+
+This module defines the normalizing flow decoders used in CFLOW
+for anomaly detection. It uses the FrEIA library to build both
+conditional and unconditional normalizing flows.
+"""
 import math
 import torch
 from torch import nn
@@ -6,6 +13,8 @@ import FrEIA.framework as Ff
 import FrEIA.modules as Fm
 from utils.constants import _GCONST_
 
+# Global activation dict (filled by TimmActivationEncoder wrapper instead of hooks)
+activation = {}
 
 def positionalencoding2d(D, H, W):
     """
@@ -89,15 +98,6 @@ def load_decoder_arch(c, dim_in):
     else:
         raise NotImplementedError("{} is not supported NF!".format(c.dec_arch))
     return decoder
-
-
-# ---- ORIJINAL global activation dict (hook yerine wrapper dolduracak) ----
-activation = {}
-
-def t2np(tensor):
-    # Convert a torch tensor to a numpy array
-    return tensor.cpu().data.numpy() if tensor is not None else None
-
 
 def get_logp(C, z, logdet_J):
     # Compute log-probability for a normalizing flow.

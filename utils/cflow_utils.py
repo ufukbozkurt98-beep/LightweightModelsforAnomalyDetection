@@ -1,9 +1,15 @@
+"""
+CFLOW Training and Testing Utilities.
+
+This module contains the training and testing loop implementations
+for CFLOW, including learning rate scheduling and meta-epoch logic.
+"""
 import math
 import numpy as np
 from tqdm import tqdm
 import time
 import torch
-from methods.cflow_freia import positionalencoding2d, activation, get_logp, t2np
+from methods.cflow_freia import positionalencoding2d, activation, get_logp
 import torch.nn.functional as F
 
 log_theta = torch.nn.LogSigmoid()
@@ -203,3 +209,7 @@ def test_meta_epoch(c, epoch, loader, encoder, decoders, pool_layers, N):
 
     return height, width, image_list, test_dist, gt_label_list, gt_mask_list
 
+
+def t2np(tensor):
+    # Convert a torch tensor to a numpy array
+    return tensor.cpu().data.numpy() if tensor is not None else None
