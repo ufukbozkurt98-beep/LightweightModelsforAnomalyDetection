@@ -1,4 +1,4 @@
-# utils/eval_metrics.py
+# utils/eval_metrics_cflow.py
 import numpy as np
 import torch
 from sklearn.metrics import roc_auc_score
@@ -67,12 +67,6 @@ def _rescale(x):
 
 
 def aupro(maps, y_pix, expect_fpr=0.3, max_step=1000):
-    """
-    CFLOW-AD train.py'daki AUPRO hesaplamasına uyumlu:
-      - threshold sweep
-      - regionprops ile per-region overlap (PRO)
-      - fpr <= 0.3 seç, fpr'yi [0,1]'e rescale et, auc(fpr, pro)
-    """
     if y_pix is None:
         raise ValueError("AUPRO requires GT masks.")
 

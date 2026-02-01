@@ -14,7 +14,7 @@ from utils.data_loader import make_loader_mvtec_ad
 from utils.feature_extractor import build_extractor
 from methods.cflow_method import CFlowMethod
 
-from utils.eval_metrics import (
+from utils.eval_metrics_cflow import (
     collect_gt_from_loader, image_level_auroc, pixel_level_auroc, aupro
 )
 from methods.cflow_train_and_test import train_and_test_cflow

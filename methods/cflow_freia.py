@@ -13,7 +13,8 @@ import FrEIA.framework as Ff
 import FrEIA.modules as Fm
 from utils.constants import _GCONST_
 
-# Global activation dict (filled by TimmActivationEncoder wrapper instead of hooks)
+# Global activation dict
+# (filled by TimmActivationEncoder wrapper instead of hooks)
 activation = {}
 
 def positionalencoding2d(D, H, W):
@@ -98,6 +99,7 @@ def load_decoder_arch(c, dim_in):
     else:
         raise NotImplementedError("{} is not supported NF!".format(c.dec_arch))
     return decoder
+
 
 def get_logp(C, z, logdet_J):
     # Compute log-probability for a normalizing flow.

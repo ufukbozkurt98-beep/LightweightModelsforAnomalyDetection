@@ -2,7 +2,7 @@ import torch
 
 from utils.feature_extractor import build_extractor
 from methods.cflow_method import CFlowMethod
-from utils.eval_metrics import (
+from utils.eval_metrics_cflow import (
     collect_gt_from_loader,
     image_level_auroc,
     pixel_level_auroc,
@@ -25,9 +25,7 @@ def train_and_test_cflow(
     sub_epochs: int = 8,
     input_size: int = 256,
 ):
-    """
-    Train CFLOW on train_loader and evaluate on test_loader.
-    """
+
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
