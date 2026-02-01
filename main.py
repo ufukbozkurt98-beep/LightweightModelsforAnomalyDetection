@@ -64,6 +64,21 @@ def main():
     backbone_name = "mobilevit_s"
     model_name = "cflow"
 
+    #  This catches any feature extraction problems BEFORE training starts
+    print("\n" + "=" * 60)
+    print("Testing Feature Extractor...")
+    print("=" * 60)
+    test_extractor = build_extractor(backbone_name, pretrained=True, device=device)
+    test_input = torch.randn(2, 3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE).to(device)
+    with torch.no_grad():
+        test_feats = test_extractor(test_input)
+        print(f"Input shape: {test_input.shape}")
+        for k, v in test_feats.items():
+            print(f"  {k}: {v.shape} (channels={v.shape[1]})")
+    print("Feature extractor OK!")
+    print("=" * 60 + "\n")
+    del test_extractor, test_input, test_feats  # Free memory
+
     if model_name == "cflow":
         scores, maps, metrics = train_and_test_cflow(
             train_loader=train_loader,

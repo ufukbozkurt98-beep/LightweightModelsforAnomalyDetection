@@ -140,6 +140,15 @@ class CFlowMethod:
         # Optimizer updates only decoder weights
         self.optimizer = torch.optim.Adam(params, lr=self.c.lr)
 
+        # Verify the imm-based feature extractor is returning features at the correct scales.
+        print("\n" + "=" * 60)
+        print("CFLOW Feature Extraction Verification:")
+        print("=" * 60)
+        for i, layer in enumerate(self.pool_layers):
+            feat = activation[layer]
+            print(f"{layer} -> Shape: {feat.shape}, Channels: {pool_dims[i]}")
+        print("=" * 60 + "\n")
+
     def fit(self, train_loader):
         # Build decoders and optimizer if not built yet
         if self.decoders is None:

@@ -202,7 +202,7 @@ def test_meta_epoch(c, epoch, loader, encoder, decoders, pool_layers, N):
                     test_count += len(loss)
                     test_dist[l] = test_dist[l] + log_prob.detach().cpu().tolist()
 
-    fps = (len(loader.loader.dataset) / (time.time() - start))
+    fps = (len(loader.dataset) / (time.time() - start))
     mean_test_loss = test_loss / test_count
     if c.verbose:
         print("Epoch: {:d} \t test_loss: {:.4f} and {:.2f} fps".format(epoch, mean_test_loss, fps))

@@ -29,10 +29,10 @@ def train_and_test_cflow(
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # 1) Build extractor
+    # Build extractor
     extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
 
-    # 2) Build CFLOW
+    # Build CFLOW
     cflow = CFlowMethod(
         extractor,
         device=device,
@@ -46,13 +46,13 @@ def train_and_test_cflow(
         input_size=input_size,
     )
 
-    # 3) Train
+    # Train
     cflow.fit(train_loader)
 
-    # 4) Predict on test
+    # Predict
     scores, maps = cflow.predict(test_loader)
 
-    # 5) Metrics
+    # Results
     y_img, y_pix = collect_gt_from_loader(test_loader)
     img_auc = image_level_auroc(y_img, scores)
     pix_auc = pixel_level_auroc(y_pix, maps)
