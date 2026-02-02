@@ -32,6 +32,8 @@ def main():
         val_ratio=VAL_RATIO,
         seed=SEED
     )
+    backbone_name = "mobilevit_s"
+    model_name = "cflow"
 
     # 1) loaders
     train_loader = make_loader_mvtec_ad(
@@ -52,8 +54,9 @@ def main():
     b = next(iter(train_loader))
     print("TRAIN shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
 
-    b = next(iter(val_loader))
-    print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
+    if model_name != "cflow":
+        b = next(iter(val_loader))
+        print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
 
     b = next(iter(test_loader))
     print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
@@ -61,8 +64,6 @@ def main():
     print("Mask sums (per sample):", b["mask"].sum(dim=(1, 2, 3)).tolist())
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    backbone_name = "mobilevit_s"
-    model_name = "cflow"
 
     #  This catches any feature extraction problems BEFORE training starts
     print("\n" + "=" * 60)

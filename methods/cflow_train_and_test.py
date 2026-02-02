@@ -32,7 +32,7 @@ def train_and_test_cflow(
     # Build extractor
     extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
 
-    # Build CFLOW
+    # Build cflow
     cflow = CFlowMethod(
         extractor,
         device=device,

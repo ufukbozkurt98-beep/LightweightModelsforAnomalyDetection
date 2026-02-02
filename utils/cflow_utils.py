@@ -67,10 +67,11 @@ def train_meta_epoch(c, epoch, loader, encoder, decoders, optimizer, pool_layers
 
         # Loop over batches
         for i in range(I):
+            # Apply learning rate warmup during early epochs
             lr = warmup_learning_rate(c, epoch, i + sub_epoch * I, I * c.sub_epochs, optimizer)
 
             try:
-                image, _, _ = next(iterator)
+                image, _, _ = next(iterator) # Get image for training
             except StopIteration:
                 iterator = iter(loader)
                 image, _, _ = next(iterator)
@@ -78,8 +79,9 @@ def train_meta_epoch(c, epoch, loader, encoder, decoders, optimizer, pool_layers
             image = image.to(c.device)
             with torch.no_grad():
                 _ = encoder(image)
-
+            # Train one decoder for each feature scale
             for l, layer in enumerate(pool_layers):
+                # So far, this if statement is not be used. It is kept just in case
                 if "vit" in c.enc_arch:
                     e = activation[layer].transpose(1, 2)[..., 1:]
                     e_hw = int(np.sqrt(e.size(2)))
@@ -87,17 +89,24 @@ def train_meta_epoch(c, epoch, loader, encoder, decoders, optimizer, pool_layers
                 else:
                     e = activation[layer].detach()
 
+                # Get feature dimensions
                 B, C, H, W = e.size()
                 S = H * W
                 E = B * S
 
+                # Create positional encoding
                 p = positionalencoding2d(P, H, W).to(c.device).unsqueeze(0).repeat(B, 1, 1, 1)
+                # Reshape features for processing
                 c_r = p.reshape(B, P, S).transpose(1, 2).reshape(E, P)
                 e_r = e.reshape(B, C, S).transpose(1, 2).reshape(E, C)
+
+                # Random permutation for better training
                 perm = torch.randperm(E).to(c.device)
 
+                # Get the decoder for this scale ex: l0 decoder, l1 decoder etc
                 decoder = decoders[l]
 
+                # Fiber batching loop
                 FIB = E // N
                 assert FIB > 0, "MAKE SURE WE HAVE ENOUGH FIBERS, otherwise decrease N or batch-size!"
                 for f in range(FIB):
@@ -110,10 +119,12 @@ def train_meta_epoch(c, epoch, loader, encoder, decoders, optimizer, pool_layers
                     else:
                         z, log_jac_det = decoder(e_p)
 
+                    # Compute loss
                     decoder_log_prob = get_logp(C, z, log_jac_det)
                     log_prob = decoder_log_prob / C
                     loss = -log_theta(log_prob)
 
+                    # Backpropagation and optimization
                     optimizer.zero_grad()
                     loss.mean().backward()
                     optimizer.step()
@@ -121,6 +132,7 @@ def train_meta_epoch(c, epoch, loader, encoder, decoders, optimizer, pool_layers
                     train_loss += t2np(loss.sum())
                     train_count += len(loss)
 
+        # Print statistics
         mean_train_loss = train_loss / train_count
         if c.verbose:
             print(
@@ -131,11 +143,16 @@ def train_meta_epoch(c, epoch, loader, encoder, decoders, optimizer, pool_layers
 
 
 def test_meta_epoch(c, epoch, loader, encoder, decoders, pool_layers, N):
+    # Setup
     if c.verbose:
         print("\nCompute loss and scores on test set:")
 
     P = c.condition_vec
+
+    # Set all decoders to evaluation mode
     decoders = [decoder.eval() for decoder in decoders]
+
+    # Initialize lists to store results
     height = list()
     width = list()
     image_list = list()
@@ -146,15 +163,20 @@ def test_meta_epoch(c, epoch, loader, encoder, decoders, pool_layers, N):
     test_count = 0
     start = time.time()
 
-    with torch.no_grad():
+    # Testing
+    with torch.no_grad():  # Disable gradient computation
+        # Loop all test batches
         for i, (image, label, mask) in enumerate(tqdm(loader, disable=c.hide_tqdm_bar)):
+            # Collect ground truth information
             gt_label_list.extend(t2np(label))
             gt_mask_list.extend(t2np(mask))
 
             image = image.to(c.device)
             _ = encoder(image)
 
+            # Loop each scale (layer0, layer1, layer2) and get features for corresponding scale
             for l, layer in enumerate(pool_layers):
+                # So far, this if statement is not be used. It is kept just in case
                 if "vit" in c.enc_arch:
                     e = activation[layer].transpose(1, 2)[..., 1:]
                     e_hw = int(np.sqrt(e.size(2)))
@@ -162,38 +184,50 @@ def test_meta_epoch(c, epoch, loader, encoder, decoders, pool_layers, N):
                 else:
                     e = activation[layer]
 
+                # Get dimensions
                 B, C, H, W = e.size()
                 S = H * W
                 E = B * S
-
+                # Save feature map size just once
                 if i == 0:
                     height.append(H)
                     width.append(W)
 
+                # Create positional encoding
                 p = positionalencoding2d(P, H, W).to(c.device).unsqueeze(0).repeat(B, 1, 1, 1)
+
+                # Reshape features
                 c_r = p.reshape(B, P, S).transpose(1, 2).reshape(E, P)
                 e_r = e.reshape(B, C, S).transpose(1, 2).reshape(E, C)
 
+                # Resize ground truth mask to match feature map size
                 m = F.interpolate(mask, size=(H, W), mode="nearest")
                 m_r = m.reshape(B, 1, S).transpose(1, 2).reshape(E, 1)
 
+                # Get decoder for this scale
                 decoder = decoders[l]
+                # Fiber Batching loop
                 FIB = E // N + int(E % N > 0)
+
+                # Get indices for this fiber batch
                 for f in range(FIB):
                     if f < (FIB - 1):
                         idx = torch.arange(f * N, (f + 1) * N)
                     else:
                         idx = torch.arange(f * N, E)
 
+                    # Get data for this fiber batch
                     c_p = c_r[idx]
                     e_p = e_r[idx]
                     m_p = m_r[idx] > 0.5
 
+                    # Pass through decoder
                     if "cflow" in c.dec_arch:
                         z, log_jac_det = decoder(e_p, [c_p])
                     else:
                         z, log_jac_det = decoder(e_p)
 
+                    # Compute anomaly score
                     decoder_log_prob = get_logp(C, z, log_jac_det)
                     log_prob = decoder_log_prob / C
                     loss = -log_theta(log_prob)
@@ -201,8 +235,8 @@ def test_meta_epoch(c, epoch, loader, encoder, decoders, pool_layers, N):
                     test_loss += t2np(loss.sum())
                     test_count += len(loss)
                     test_dist[l] = test_dist[l] + log_prob.detach().cpu().tolist()
-
-    fps = (len(loader.dataset) / (time.time() - start))
+    # Compute statistic
+    fps = (len(loader.loader.dataset) / (time.time() - start))
     mean_test_loss = test_loss / test_count
     if c.verbose:
         print("Epoch: {:d} \t test_loss: {:.4f} and {:.2f} fps".format(epoch, mean_test_loss, fps))
