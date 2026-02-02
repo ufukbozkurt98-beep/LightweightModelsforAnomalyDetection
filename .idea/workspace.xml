@@ -6,13 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="53e2a920-f20c-4546-92a1-7fb353a9c20c" name="Changes" comment="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/methods/cflow_freia.py" beforeDir="false" afterPath="$PROJECT_DIR$/methods/cflow_freia.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/methods/cflow_train_and_test.py" beforeDir="false" afterPath="$PROJECT_DIR$/methods/cflow_train_and_test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/cflow_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/cflow_utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/eval_metrics_cflow.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/eval_metrics_cflow.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/feature_extractor.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/feature_extractor.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -215,7 +208,15 @@
       <option name="project" value="LOCAL" />
       <updated>1769960403099</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770073464340</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1770073464341</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
