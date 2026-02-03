@@ -1,15 +1,30 @@
-from pathlib import Path
+from configs.config import METHOD
+
+from runners.glass_runner import run_glass
+from runners.simplenet_runner import run_simplenet
+
+from glass_src.glass import GLASS  # import the GLASS object from the glass.py file of glass_src package
+from utils.glass_backbone_adapter import GlassBackboneAdapter
+from utils.glass_loader_adapter import GlassLoaderAdapter
+#--------------------------------
+from pathlib import Path  # to enable to use path objects and /|\ handling
 
 import torch
 
 from configs.config import (
-    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED,
-    IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH
+    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, BACKBONE_KEY, METHOD, VAL_RATIO_CFLOW
 )
 
 from utils.mvtec_extract import ensure_extracted
 from utils.data_check_and_split import scan_and_split
 from utils.data_loader import make_loader_mvtec_ad
+
+import torch
+import torchvision.models as tvm
+
+from utils.feature_extractor import build_extractor
+
+from configs.config import BACKBONE_KEY
 
 from utils.feature_extractor import build_extractor
 from methods.cflow_method import CFlowMethod
@@ -21,9 +36,16 @@ from methods.cflow_train_and_test import train_and_test_cflow
 
 
 def main():
-    # 0) data prepare/split
-    data_root = ensure_extracted(TAR_PATH, str(MVTEC_ROOT))
+    tar_path = TAR_PATH  # the place of the mvtec.tar
+
+    # extract the tar_path archive into MVTEC_ROOT, return the extracted path
+    data_root = ensure_extracted(tar_path, str(MVTEC_ROOT))
+
+    #  create the folder to store split and report files
+    
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # dataset check and train/val split
 
     scan_and_split(
         mvtec_root=Path(data_root),
@@ -32,74 +54,44 @@ def main():
         val_ratio=VAL_RATIO,
         seed=SEED
     )
-    backbone_name = "mobilevit_s"
-    model_name = "cflow"
 
-    # 1) loaders
-    train_loader = make_loader_mvtec_ad(
-        Path(data_root), CATEGORY, "train", SPLIT_JSON,
-        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE
-    )
-    val_loader = make_loader_mvtec_ad(
-        Path(data_root), CATEGORY, "val", SPLIT_JSON,
-        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE
-    )
-    test_loader = make_loader_mvtec_ad(
-        Path(data_root), CATEGORY, "test", SPLIT_JSON,
-        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE
-    )
-
-    # sanity prints
-    print("val size:", len(val_loader.dataset))
-    b = next(iter(train_loader))
-    print("TRAIN shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-
-    if model_name != "cflow":
-        b = next(iter(val_loader))
-        print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-
-    b = next(iter(test_loader))
-    print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-    print("TEST defect types sample:", b["defect_type"][:4])
-    print("Mask sums (per sample):", b["mask"].sum(dim=(1, 2, 3)).tolist())
+    # building the data loaders
+    train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
+                                        batch_size=BATCH_SIZE)
+    if METHOD.lover() != "cflow":
+        val_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
+                                      batch_size=BATCH_SIZE)
+    else:
+      
+    test_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
+                                       batch_size=BATCH_SIZE)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    #  This catches any feature extraction problems BEFORE training starts
-    print("\n" + "=" * 60)
-    print("Testing Feature Extractor...")
-    print("=" * 60)
-    test_extractor = build_extractor(backbone_name, pretrained=True, device=device)
-    test_input = torch.randn(2, 3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE).to(device)
-    with torch.no_grad():
-        test_feats = test_extractor(test_input)
-        print(f"Input shape: {test_input.shape}")
-        for k, v in test_feats.items():
-            print(f"  {k}: {v.shape} (channels={v.shape[1]})")
-    print("Feature extractor OK!")
-    print("=" * 60 + "\n")
-    del test_extractor, test_input, test_feats  # Free memory
-
-    if model_name == "cflow":
+    if METHOD.lower() == "glass":
+        run_glass(train_loader, val_loader, test_loader)
+    elif METHOD.lower() == "simplenet":
+        run_simplenet(train_loader, val_loader, test_loader)
+    elif METHOD.lower() == "cflow"
         scores, maps, metrics = train_and_test_cflow(
-            train_loader=train_loader,
-            test_loader=test_loader,
-            backbone_name=backbone_name,
-            device=device,
-            coupling_blocks=8,
-            condition_vec=128,
-            clamp_alpha=1.9,
-            N=256,
-            lr=2e-4,
-            meta_epochs=25,
-            sub_epochs=8,
-            input_size=IMAGE_INPUT_SIZE,
+              train_loader=train_loader,
+              test_loader=test_loader,
+              backbone_name=BACKBONE_KEY,
+              device=device,
+              coupling_blocks=8,
+              condition_vec=128,
+              clamp_alpha=1.9,
+              N=256,
+              lr=2e-4,
+              meta_epochs=25,
+              sub_epochs=8,
+              input_size=IMAGE_INPUT_SIZE,
         )
-
         print(f"Image-level AUROC%: {metrics['image_auroc'] * 100:.2f}")
         print(f"Pixel-level AUROC%: {metrics['pixel_auroc'] * 100:.2f}")
         print(f"PRO (AUPRO@0.3)%: {metrics['aupro_0.3'] * 100:.2f}")
-
+    else:
+        raise ValueError(f"Unknown METHOD: {METHOD}")
 
 if __name__ == "__main__":
     main()
