@@ -7,6 +7,9 @@ import torchvision.transforms.functional as TF
 from utils.constants import IMAGENET_MEAN, IMAGENET_STD
 from utils.transform_config import resize_keep_aspect, pad_to_square, TransformConfig
 
+import random
+from torchvision.transforms import InterpolationMode
+
 
 class ImageMaskTransform:
     def __init__(self, cfg: TransformConfig):
@@ -27,6 +30,15 @@ class ImageMaskTransform:
                                       # Using 'nearest' for masks, so we don’t create blurry “gray” edges.
                                       Image.NEAREST)
             mask = pad_to_square(mask, self.cfg.input_size, fill=0)
+
+        # AUGMENTATION: only for rotate_deg > 0
+        if self.cfg.rotate_deg and self.cfg.rotate_deg > 0:
+            angle = random.uniform(-self.cfg.rotate_deg, self.cfg.rotate_deg)
+
+            img = TF.rotate(img, angle, interpolation=InterpolationMode.BILINEAR, fill=0)
+
+            if mask is not None:
+                mask = TF.rotate(mask, angle, interpolation=InterpolationMode.NEAREST, fill=0)
 
         x = TF.to_tensor(img)  # Converting PIL image to tensor
         if self.cfg.normalize:  #if normalize is enabled, apply normalization

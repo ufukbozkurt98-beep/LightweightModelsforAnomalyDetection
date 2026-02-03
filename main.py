@@ -9,8 +9,10 @@ from utils.glass_loader_adapter import GlassLoaderAdapter
 #--------------------------------
 from pathlib import Path  # to enable to use path objects and /|\ handling
 
+import torch
+
 from configs.config import (
-    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, BACKBONE_KEY, METHOD
+    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, BACKBONE_KEY, METHOD, VAL_RATIO_CFLOW
 )
 
 from utils.mvtec_extract import ensure_extracted
@@ -24,6 +26,14 @@ from utils.feature_extractor import build_extractor
 
 from configs.config import BACKBONE_KEY
 
+from utils.feature_extractor import build_extractor
+from methods.cflow_method import CFlowMethod
+
+from utils.eval_metrics_cflow import (
+    collect_gt_from_loader, image_level_auroc, pixel_level_auroc, aupro
+)
+from methods.cflow_train_and_test import train_and_test_cflow
+
 
 def main():
     tar_path = TAR_PATH  # the place of the mvtec.tar
@@ -32,6 +42,7 @@ def main():
     data_root = ensure_extracted(tar_path, str(MVTEC_ROOT))
 
     #  create the folder to store split and report files
+    
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # dataset check and train/val split
@@ -39,24 +50,46 @@ def main():
     scan_and_split(
         mvtec_root=Path(data_root),
         out_dir=REPORTS_DIR,
-        category=CATEGORY,  # None =  all categories
+        category=CATEGORY,
         val_ratio=VAL_RATIO,
         seed=SEED
     )
 
-
     # building the data loaders
     train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                         batch_size=BATCH_SIZE)
-    val_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
+    if METHOD.lover() != "cflow":
+        val_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                       batch_size=BATCH_SIZE)
+    else:
+      
     test_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                        batch_size=BATCH_SIZE)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if METHOD.lower() == "glass":
         run_glass(train_loader, val_loader, test_loader)
     elif METHOD.lower() == "simplenet":
         run_simplenet(train_loader, val_loader, test_loader)
+    elif METHOD.lower() == "cflow"
+        scores, maps, metrics = train_and_test_cflow(
+              train_loader=train_loader,
+              test_loader=test_loader,
+              backbone_name=BACKBONE_KEY,
+              device=device,
+              coupling_blocks=8,
+              condition_vec=128,
+              clamp_alpha=1.9,
+              N=256,
+              lr=2e-4,
+              meta_epochs=25,
+              sub_epochs=8,
+              input_size=IMAGE_INPUT_SIZE,
+        )
+        print(f"Image-level AUROC%: {metrics['image_auroc'] * 100:.2f}")
+        print(f"Pixel-level AUROC%: {metrics['pixel_auroc'] * 100:.2f}")
+        print(f"PRO (AUPRO@0.3)%: {metrics['aupro_0.3'] * 100:.2f}")
     else:
         raise ValueError(f"Unknown METHOD: {METHOD}")
 

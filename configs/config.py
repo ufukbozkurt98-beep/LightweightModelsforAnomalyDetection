@@ -3,8 +3,9 @@ from pathlib import Path
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-CATEGORY = "cable"
+CATEGORY = "bottle"
 VAL_RATIO = 0.2
+VAL_RATIO_CFLOW = 0.0
 SEED = 42
 BATCH_SIZE = 16
 IMAGE_INPUT_SIZE = 256
@@ -14,5 +15,4 @@ TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
 BACKBONE_KEY = "mobilenetv3_small"
 METHOD = "glass"
 #METHOD = "simplenet"
-
-
+#METHOD = "cflow"
