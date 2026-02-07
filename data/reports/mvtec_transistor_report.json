@@ -1,0 +1,14 @@
+{
+  "category": "transistor",
+  "counts": {
+    "train_good": 213,
+    "test_good": 60,
+    "test_anomaly": 40
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

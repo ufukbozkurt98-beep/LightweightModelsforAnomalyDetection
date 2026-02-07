@@ -1,0 +1,14 @@
+{
+  "category": "tile",
+  "counts": {
+    "train_good": 230,
+    "test_good": 33,
+    "test_anomaly": 84
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

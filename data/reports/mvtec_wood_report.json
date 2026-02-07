@@ -1,0 +1,14 @@
+{
+  "category": "wood",
+  "counts": {
+    "train_good": 247,
+    "test_good": 19,
+    "test_anomaly": 60
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

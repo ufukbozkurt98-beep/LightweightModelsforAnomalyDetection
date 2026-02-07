@@ -1,0 +1,14 @@
+{
+  "category": "zipper",
+  "counts": {
+    "train_good": 240,
+    "test_good": 32,
+    "test_anomaly": 119
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

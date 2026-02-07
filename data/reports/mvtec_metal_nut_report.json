@@ -1,0 +1,14 @@
+{
+  "category": "metal_nut",
+  "counts": {
+    "train_good": 220,
+    "test_good": 22,
+    "test_anomaly": 93
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

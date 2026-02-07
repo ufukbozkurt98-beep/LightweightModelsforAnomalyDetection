@@ -1,0 +1,14 @@
+{
+  "category": "capsule",
+  "counts": {
+    "train_good": 219,
+    "test_good": 23,
+    "test_anomaly": 109
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}
