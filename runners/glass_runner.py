@@ -1,4 +1,4 @@
-from glass_src.glass import GLASS  # import the GLASS object from the glass.py file of glass_src package
+# from glass_source_code.glass_src import GLASS # import the GLASS object from the glass.py file of glass_src package
 from utils.glass_backbone_adapter import GlassBackboneAdapter
 from utils.glass_loader_adapter import GlassLoaderAdapter
 #--------------------------------
@@ -18,6 +18,7 @@ import torchvision.models as tvm
 from utils.feature_extractor import build_extractor
 
 from configs.config import BACKBONE_KEY
+
 
 def run_glass(train_loader, val_loader, test_loader):
     # getting the first batch from the loaders and printing the sizes and the labels

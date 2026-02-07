@@ -3,7 +3,7 @@ from configs.config import METHOD
 from runners.glass_runner import run_glass
 from runners.simplenet_runner import run_simplenet
 
-from glass_src.glass import GLASS  # import the GLASS object from the glass.py file of glass_src package
+# from glass_src.glass import GLASS  # import the GLASS object from the glass.py file of glass_src package
 from utils.glass_backbone_adapter import GlassBackboneAdapter
 from utils.glass_loader_adapter import GlassLoaderAdapter
 #--------------------------------
@@ -58,7 +58,7 @@ def main():
     # building the data loaders
     train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                         batch_size=BATCH_SIZE)
-    if METHOD.lover() != "cflow":
+    if METHOD.lower() != "cflow":
         val_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                       batch_size=BATCH_SIZE)
 

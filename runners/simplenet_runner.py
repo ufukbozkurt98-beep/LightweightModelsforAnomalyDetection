@@ -18,7 +18,7 @@ from utils.feature_extractor import build_extractor
 
 from configs.config import BACKBONE_KEY
 
-from simplenet_code.simplenet_author.simplenet import SimpleNet
+# from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
 
 def run_simplenet(train_loader, val_loader, test_loader):
