@@ -13,6 +13,6 @@ SPLIT_JSON = REPORTS_DIR / f"mvtec_{CATEGORY}_split.json" # path object pointing
 NUM_WORKERS = 2
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
 BACKBONE_KEY = "mobilenetv3_small"
-METHOD = "glass"
+METHOD = "cflow"
 #METHOD = "simplenet"
 #METHOD = "cflow"

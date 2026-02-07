@@ -61,8 +61,7 @@ def main():
     if METHOD.lover() != "cflow":
         val_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                       batch_size=BATCH_SIZE)
-    else:
-      
+
     test_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                        batch_size=BATCH_SIZE)
 
@@ -72,7 +71,7 @@ def main():
         run_glass(train_loader, val_loader, test_loader)
     elif METHOD.lower() == "simplenet":
         run_simplenet(train_loader, val_loader, test_loader)
-    elif METHOD.lower() == "cflow"
+    elif METHOD.lower() == "cflow":
         scores, maps, metrics = train_and_test_cflow(
               train_loader=train_loader,
               test_loader=test_loader,
@@ -87,11 +86,9 @@ def main():
               sub_epochs=8,
               input_size=IMAGE_INPUT_SIZE,
         )
-        print(f"Image-level AUROC%: {metrics['image_auroc'] * 100:.2f}")
-        print(f"Pixel-level AUROC%: {metrics['pixel_auroc'] * 100:.2f}")
-        print(f"PRO (AUPRO@0.3)%: {metrics['aupro_0.3'] * 100:.2f}")
     else:
         raise ValueError(f"Unknown METHOD: {METHOD}")
+
 
 if __name__ == "__main__":
     main()

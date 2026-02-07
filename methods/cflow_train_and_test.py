@@ -63,5 +63,8 @@ def train_and_test_cflow(
         "pixel_auroc": float(pix_auc),
         "aupro_0.3": float(pro),
     }
+    print(f"Image-level AUROC%: {metrics['image_auroc'] * 100:.2f}")
+    print(f"Pixel-level AUROC%: {metrics['pixel_auroc'] * 100:.2f}")
+    print(f"PRO (AUPRO@0.3)%: {metrics['aupro_0.3'] * 100:.2f}")
 
     return scores, maps, metrics
