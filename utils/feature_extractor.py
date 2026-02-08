@@ -31,6 +31,21 @@ LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
     "mobilevit_xs": BackboneSpec(source="timm", name="mobilevit_xs", out_indices=(1, 2, 3)),
     "mobilevit_s": BackboneSpec(source="timm", name="mobilevit_s", out_indices=(1, 2, 3)),
 
+    # ShuffleNet V1 (custom implementation, not available in timm/torchvision)
+    # Groups control the number of group convolutions (g=1,2,3,4,8 from the paper)
+    # g=3 is the default configuration from the paper (best accuracy/complexity trade-off)
+    "shufflenet_g1": BackboneSpec(source="custom_shufflenet", name="shufflenet_g1"),
+    "shufflenet_g2": BackboneSpec(source="custom_shufflenet", name="shufflenet_g2"),
+    "shufflenet_g3": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3"),
+    "shufflenet_g4": BackboneSpec(source="custom_shufflenet", name="shufflenet_g4"),
+    "shufflenet_g8": BackboneSpec(source="custom_shufflenet", name="shufflenet_g8"),
+
+    # ShuffleNet V1 scaled variants (width multipliers)
+    # x0.25 gives channels comparable to MobileNetV3 (~60/120/240) for lightweight FastFlow
+    "shufflenet_g3_x0_25": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3_x0_25"),
+    "shufflenet_g3_x0_5": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3_x0_5"),
+    "shufflenet_g3_x2_0": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3_x2_0"),
+
 }
 
 
@@ -52,6 +67,8 @@ class MultiScaleFeatureExtractor(nn.Module):
         # For different model other libraries or implementations can be used
         if spec.source == "timm":
             self._impl = _TimmFeaturesOnly(spec.name, out_indices=spec.out_indices, pretrained=pretrained)
+        elif spec.source == "custom_shufflenet":
+            self._impl = _ShuffleNetFeaturesOnly(spec.name)
         else:
             raise ValueError(f"Unknown backbone source: {spec.source}")
 
@@ -110,6 +127,51 @@ class _TimmFeaturesOnly(nn.Module):
                 f"Expected 3 feature levels from timm backbone, got {len(feats)}. "
             )
         return {"l1": feats[0], "l2": feats[1], "l3": feats[2]}
+
+
+class _ShuffleNetFeaturesOnly(nn.Module):
+    """
+    Extract multi-scale features using our custom ShuffleNet V1 implementation.
+
+    Uses forward_features() to return {"l1", "l2", "l3"} from stage2, stage3, stage4.
+    No pretrained weights are available (ShuffleNet V1 is trained from scratch).
+    """
+
+    # Map of model name -> (groups, scale)
+    _CONFIGS = {
+        "shufflenet_g1":        (1, 1.0),
+        "shufflenet_g2":        (2, 1.0),
+        "shufflenet_g3":        (3, 1.0),
+        "shufflenet_g4":        (4, 1.0),
+        "shufflenet_g8":        (8, 1.0),
+        "shufflenet_g3_x0_25":  (3, 0.25),
+        "shufflenet_g3_x0_5":   (3, 0.5),
+        "shufflenet_g3_x2_0":   (3, 2.0),
+    }
+
+    def __init__(self, model_name: str) -> None:
+        super().__init__()
+        from utils.shufflenet import ShuffleNet
+
+        if model_name not in self._CONFIGS:
+            raise ValueError(
+                f"Unknown ShuffleNet config '{model_name}'. "
+                f"Available: {list(self._CONFIGS.keys())}"
+            )
+
+        groups, scale = self._CONFIGS[model_name]
+
+        # num_classes=0 disables the classifier head (we only need features)
+        self.backbone = ShuffleNet(groups=groups, num_classes=0, scale=scale)
+
+        # Store feature channel counts for each level
+        self.feature_channels = {
+            f"l{i+1}": c for i, c in enumerate(self.backbone.stage_out_channels)
+        }
+
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        # Extract multi-scale features using forward_features()
+        return self.backbone.forward_features(x)
 
 
 def build_extractor(
