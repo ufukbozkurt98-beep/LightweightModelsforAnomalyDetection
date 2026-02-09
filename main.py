@@ -89,7 +89,7 @@ def main():
             device=device,
             flow_steps=8,
             conv3x3_only=False,
-            hidden_ratio=1.0,
+            hidden_ratio=1.5,
             clamp=2.0,
             lr=1e-3,
             meta_epochs=200,
