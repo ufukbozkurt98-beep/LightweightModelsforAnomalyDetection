@@ -1,20 +1,3 @@
-"""
-ShuffleNet V1 implementation for multi-scale feature extraction.
-
-Based on the paper:
-  "ShuffleNet: An Extremely Efficient Convolutional Neural Network for Mobile Devices"
-  Xiangyu Zhang, Xinyu Zhou, Mengxiao Lin, Jian Sun (2017)
-  https://arxiv.org/abs/1707.01083
-
-Key components:
-  - Channel Shuffle: redistributes channels across groups after group convolution
-  - ShuffleNet Unit: group conv 1x1 -> channel shuffle -> depthwise conv 3x3 -> group conv 1x1
-  - Three stages with configurable output channels and number of groups
-
-This implementation supports multi-scale feature extraction (returning features from
-stage2, stage3, stage4) for use as a backbone in anomaly detection methods.
-"""
-
 from __future__ import annotations
 
 from typing import Dict, List
@@ -26,27 +9,18 @@ import torch.nn.functional as F
 
 def channel_shuffle(x: torch.Tensor, groups: int) -> torch.Tensor:
     """
-    Channel shuffle operation from ShuffleNet V1 (Section 3.1, Figure 1).
-
-    After a group convolution, channels within each group are independent.
-    Channel shuffle redistributes them so that the next group convolution
-    can mix information across groups.
-
-    Steps:
-      1. Reshape (B, C, H, W) -> (B, groups, C // groups, H, W)
-      2. Transpose groups and channels_per_group dimensions
-      3. Flatten back to (B, C, H, W)
+    Channel shuffle operation
     """
     batch_size, channels, height, width = x.size()
-    channels_per_group = channels // groups
+    channels_per_group = channels // groups  # Calculate how many channels in each group
 
-    # reshape: (B, C, H, W) -> (B, g, C/g, H, W)
+    # Split channels by groups
     x = x.view(batch_size, groups, channels_per_group, height, width)
 
-    # transpose: swap group and channel dimensions -> (B, C/g, g, H, W)
+    # Swap axes to mix groups
     x = x.transpose(1, 2).contiguous()
 
-    # flatten: (B, C, H, W)
+    # Back to normal tensor shape.
     x = x.view(batch_size, channels, height, width)
 
     return x
@@ -54,18 +28,7 @@ def channel_shuffle(x: torch.Tensor, groups: int) -> torch.Tensor:
 
 class ShuffleNetUnit(nn.Module):
     """
-    ShuffleNet Unit (Section 3.2, Figure 2).
-
-    Two variants:
-      - stride=1 (Figure 2b): residual connection with element-wise addition
-      - stride=2 (Figure 2c): residual connection with concatenation + avg pool on shortcut
-
-    Architecture:
-      1x1 Group Conv -> BN -> ReLU ->
-      Channel Shuffle ->
-      3x3 Depthwise Conv (stride) -> BN ->
-      1x1 Group Conv -> BN ->
-      Add/Cat with shortcut -> ReLU
+    ShuffleNet Building Block
     """
 
     def __init__(
@@ -80,31 +43,29 @@ class ShuffleNetUnit(nn.Module):
         self.stride = stride
         self.groups = groups
 
-        # For stride=2, the output channels are split: out_channels - in_channels
-        # come from the main branch, and in_channels come from the avg pool shortcut
+        # For stride=2, the output channels are split: out_channels and in_channels
         if stride == 2:
             main_out_channels = out_channels - in_channels
+        # For stride=1 residual add requires same channel size.
         else:
             main_out_channels = out_channels
 
-        # Bottleneck channels (1/4 of output as per the paper, Table 1)
-        # Must be divisible by groups for the second group conv
+        # Bottleneck channels are usually 1/4 of main branch output
         bottleneck_channels = main_out_channels // 4
-        # Round up to nearest multiple of groups to ensure divisibility
+        # Make bottleneck divisible by groups for group convolution.
         bottleneck_channels = max(((bottleneck_channels + groups - 1) // groups) * groups, groups)
 
-        # First group conv 1x1
-        # Note: for stage 2 first block, input comes from a regular conv (not group conv),
-        # so we don't use groups on the first 1x1 conv (Section 3.3 in the paper)
+        # First group convolution 1x1
         first_groups = 1 if is_stage2 else groups
 
+        # 1x1 group convolution reduces channels
         self.gconv1 = nn.Conv2d(
             in_channels, bottleneck_channels,
             kernel_size=1, groups=first_groups, bias=False
         )
-        self.bn1 = nn.BatchNorm2d(bottleneck_channels)
+        self.bn1 = nn.BatchNorm2d(bottleneck_channels) # Normalize after conv.
 
-        # 3x3 depthwise convolution
+        # Depthwise convolution (one filter per channel)
         self.dwconv = nn.Conv2d(
             bottleneck_channels, bottleneck_channels,
             kernel_size=3, stride=stride, padding=1,
@@ -112,16 +73,17 @@ class ShuffleNetUnit(nn.Module):
         )
         self.bn2 = nn.BatchNorm2d(bottleneck_channels)
 
-        # Second group conv 1x1
+        # Second pointwise group convolution to project channels
         self.gconv2 = nn.Conv2d(
             bottleneck_channels, main_out_channels,
             kernel_size=1, groups=groups, bias=False
         )
         self.bn3 = nn.BatchNorm2d(main_out_channels)
 
+        # Non-linearity
         self.relu = nn.ReLU(inplace=True)
 
-        # Shortcut for stride=2: average pooling
+        # Shortcut when stride is 2 using average pooling
         if stride == 2:
             self.shortcut = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         else:
@@ -130,29 +92,26 @@ class ShuffleNetUnit(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         residual = x
 
-        # 1x1 group conv -> BN -> ReLU
-        out = self.gconv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
+        out = self.gconv1(x)  # 1x1 group conv
+        out = self.bn1(out)  # BatchNormalization
+        out = self.relu(out) # ReLU
 
         # Channel shuffle
         out = channel_shuffle(out, self.groups)
 
         # 3x3 depthwise conv -> BN
-        out = self.dwconv(out)
-        out = self.bn2(out)
+        out = self.dwconv(out)  # 3x3 depth wise convolution
+        out = self.bn2(out) # Batch Normalization
 
         # 1x1 group conv -> BN
-        out = self.gconv2(out)
-        out = self.bn3(out)
+        out = self.gconv2(out)  # 1x1 group convolution
+        out = self.bn3(out)  # BatchNorm
 
-        # Shortcut connection
         if self.stride == 2:
-            residual = self.shortcut(residual)
-            # Concatenate along channel dimension (Figure 2c)
-            out = torch.cat([out, residual], dim=1)
+            residual = self.shortcut(residual)  # Downsample shortcut
+            out = torch.cat([out, residual], dim=1)  # Concatenate channels
         else:
-            # Element-wise addition (Figure 2b)
+            # Element-wise addition
             out = out + residual
 
         out = self.relu(out)
@@ -161,29 +120,10 @@ class ShuffleNetUnit(nn.Module):
 
 class ShuffleNet(nn.Module):
     """
-    Full ShuffleNet V1 network (Section 3.3, Table 1).
-
-    Architecture:
-      Conv1 (3x3, stride=2) -> MaxPool (3x3, stride=2) ->
-      Stage2 (repeat units) -> Stage3 (repeat units) -> Stage4 (repeat units) ->
-      GlobalAvgPool -> FC
-
-    The number of output channels per stage depends on the number of groups (g).
-    From Table 1 in the paper:
-
-    | Stage     | g=1  | g=2  | g=3  | g=4  | g=8  |
-    |-----------|------|------|------|------|------|
-    | Stage 2   | 144  | 200  | 240  | 272  | 384  |
-    | Stage 3   | 288  | 400  | 480  | 544  | 768  |
-    | Stage 4   | 576  | 800  | 960  | 1088 | 1536 |
-
-    Each stage has [4, 8, 4] repeat units respectively (first unit has stride=2).
-
-    This implementation supports a `scale` multiplier to adjust channel width,
-    and exposes multi-scale features for use as a backbone.
+    Full ShuffleNet network
     """
 
-    # Channel configurations from Table 1 (indexed by number of groups)
+    # Channel configurations
     STAGE_CHANNELS = {
         1: [144, 288, 576],
         2: [200, 400, 800],
@@ -192,7 +132,7 @@ class ShuffleNet(nn.Module):
         8: [384, 768, 1536],
     }
 
-    # Number of repeat units per stage [stage2, stage3, stage4]
+    # Number of repeat units per stage2, stage3, stage4
     STAGE_REPEATS = [4, 8, 4]
 
     def __init__(
@@ -201,14 +141,9 @@ class ShuffleNet(nn.Module):
         num_classes: int = 1000,
         scale: float = 1.0,
     ) -> None:
-        """
-        Args:
-            groups: Number of groups for group convolutions (1, 2, 3, 4, or 8).
-            num_classes: Number of output classes. Set to 0 to disable the classifier head.
-            scale: Width multiplier for channel counts (e.g., 0.5x, 1.0x, 1.5x, 2.0x).
-        """
         super().__init__()
 
+        # Validate group setting
         if groups not in self.STAGE_CHANNELS:
             raise ValueError(
                 f"groups must be one of {list(self.STAGE_CHANNELS.keys())}, got {groups}"
@@ -218,15 +153,15 @@ class ShuffleNet(nn.Module):
         self.num_classes = num_classes
 
         # Compute scaled channel counts.
-        # Channels must be divisible by groups for group convolution,
-        # so we round each scaled value to the nearest multiple of groups.
+        # Keep channel counts divisible by groups
         base_channels = self.STAGE_CHANNELS[groups]
         self.stage_out_channels = [
             self._round_to_groups(int(c * scale), groups) for c in base_channels
         ]
 
-        # Initial convolution: 3x3, stride=2, 24 output channels (from the paper)
+        # First convolotion output channels
         self.conv1_out = max(int(24 * scale), 1) if scale != 1.0 else 24
+        # Downsample
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, self.conv1_out, kernel_size=3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(self.conv1_out),
@@ -255,7 +190,7 @@ class ShuffleNet(nn.Module):
             groups=groups,
         )
 
-        # Classifier head (optional)
+        # Classifier head
         if num_classes > 0:
             self.global_pool = nn.AdaptiveAvgPool2d(1)
             self.fc = nn.Linear(self.stage_out_channels[2], num_classes)
@@ -268,7 +203,7 @@ class ShuffleNet(nn.Module):
 
     @staticmethod
     def _round_to_groups(channels: int, groups: int) -> int:
-        """Round channel count up to the nearest multiple of groups."""
+        # Round up to nearest multiple of groups
         return max(((channels + groups - 1) // groups) * groups, groups)
 
     def _make_stage(
@@ -279,10 +214,10 @@ class ShuffleNet(nn.Module):
         groups: int,
         is_stage2: bool = False,
     ) -> nn.Sequential:
-        """Build one ShuffleNet stage with the given number of repeat units."""
+        # Container for stage units
         layers: List[nn.Module] = []
 
-        # First unit has stride=2 (spatial downsampling)
+        # First unit downsamples feature map
         layers.append(
             ShuffleNetUnit(
                 in_channels=in_channels,
@@ -293,7 +228,7 @@ class ShuffleNet(nn.Module):
             )
         )
 
-        # Remaining units have stride=1
+        # Remaining units keep spatial size
         for _ in range(repeat - 1):
             layers.append(
                 ShuffleNetUnit(
@@ -303,43 +238,41 @@ class ShuffleNet(nn.Module):
                     stride=1,
                 )
             )
-
+        # Put units into one sequential stage
         return nn.Sequential(*layers)
 
     def _initialize_weights(self) -> None:
-        """Kaiming initialization for conv layers, constant for BN."""
+        # Iterate over all submodules
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
+                # Good initialization for ReLU conv
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
             elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
+                nn.init.ones_(m.weight)  # Start BatchNorm at 1
+                nn.init.zeros_(m.bias)  # Start BatchNorm bias at 0
             elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
+                nn.init.normal_(m.weight, 0, 0.01) # small random init
                 nn.init.zeros_(m.bias)
 
     def forward_features(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        Extract multi-scale features (for use as a backbone).
-
-        Returns:
-            dict with keys "l1", "l2", "l3" mapping to feature tensors from
-            stage2, stage3, stage4 respectively.
+        Extract multi-scale features
         """
         x = self.conv1(x)
         x = self.maxpool(x)
 
-        l1 = self.stage2(x)   # stage2 output
-        l2 = self.stage3(l1)  # stage3 output
-        l3 = self.stage4(l2)  # stage4 output
+        l1 = self.stage2(x)   # stage2 output - Low level
+        l2 = self.stage3(l1)  # stage3 output - Mid Level
+        l3 = self.stage4(l2)  # stage4 output - High Level
 
+        # Multi- scale output
         return {"l1": l1, "l2": l2, "l3": l3}
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Full forward pass with classifier head."""
-        feats = self.forward_features(x)
+        feats = self.forward_features(x)  # Extract multi-scale backbone features
 
         if self.global_pool is not None and self.fc is not None:
             out = self.global_pool(feats["l3"])
@@ -350,25 +283,16 @@ class ShuffleNet(nn.Module):
             return feats["l3"]
 
 
-# ---------------------------------------------------------------------------
-# Factory functions for ShuffleNet V1 configurations (from Table 1 of the paper)
-#
-# Three variants selected for benchmarking:
-#   g=1: baseline, no group conv benefit, smallest channels (144/288/576)
-#   g=3: paper's default, best accuracy/complexity trade-off (240/480/960)
-#   g=8: most aggressive grouping, widest channels (384/768/1536)
-# ---------------------------------------------------------------------------
-
 def shufflenet_g1(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=1 (baseline without group conv benefit)."""
+    """ShuffleNet with g=1"""
     return ShuffleNet(groups=1, num_classes=num_classes, scale=scale)
 
 
 def shufflenet_g3(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=3 (paper's default, best accuracy/complexity trade-off)."""
+    """ShuffleNet with g=3"""
     return ShuffleNet(groups=3, num_classes=num_classes, scale=scale)
 
 
 def shufflenet_g8(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=8 (most aggressive grouping, widest channels)."""
+    """ShuffleNet with g=8"""
     return ShuffleNet(groups=8, num_classes=num_classes, scale=scale)
