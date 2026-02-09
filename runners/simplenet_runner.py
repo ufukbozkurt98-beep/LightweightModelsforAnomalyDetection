@@ -15,11 +15,11 @@ import torchvision.models as tvm
 
 from utils.feature_extractor import build_extractor
 
-
 from configs.config import BACKBONE_KEY
 
 from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
+
 
 def run_simplenet(train_loader, val_loader, test_loader):
     # for simplenet
@@ -115,11 +115,13 @@ def run_simplenet(train_loader, val_loader, test_loader):
         layers_to_extract_from=["l2", "l3"],
         device=device,
         input_shape=[3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE],
-        pretrain_embed_dimension=1536,
-        target_embed_dimension=1536,
+        #pretrain_embed_dimension=1536,
+        #target_embed_dimension=1536,
+        pretrain_embed_dimension=512,
+        target_embed_dimension=512,
         patchsize=3,
         patchstride=1,
-        meta_epochs=200,
+        meta_epochs=40,
         gan_epochs=4,
         aed_meta_epochs=1,
         dsc_layers=2,

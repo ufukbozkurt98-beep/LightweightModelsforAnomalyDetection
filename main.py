@@ -10,7 +10,8 @@ from utils.glass_loader_adapter import GlassLoaderAdapter
 from pathlib import Path  # to enable to use path objects and /|\ handling
 
 from configs.config import (
-    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, BACKBONE_KEY, METHOD
+    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH,
+    BACKBONE_KEY, METHOD
 )
 
 from utils.mvtec_extract import ensure_extracted
@@ -44,7 +45,6 @@ def main():
         seed=SEED
     )
 
-
     # building the data loaders
     train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                         batch_size=BATCH_SIZE)
@@ -52,10 +52,6 @@ def main():
                                       batch_size=BATCH_SIZE)
     test_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                        batch_size=BATCH_SIZE)
-
-
-
-
 
     if METHOD.lower() == "glass":
         run_glass(train_loader, val_loader, test_loader)
