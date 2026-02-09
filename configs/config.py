@@ -4,7 +4,7 @@ from pathlib import Path
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
 CATEGORY = "bottle"
-VAL_RATIO = 0.2
+VAL_RATIO = 0.0
 SEED = 42
 BATCH_SIZE = 4
 IMAGE_INPUT_SIZE = 256
