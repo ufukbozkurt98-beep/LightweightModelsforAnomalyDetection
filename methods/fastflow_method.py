@@ -25,18 +25,11 @@ def subnet_conv_func(kernel_size, hidden_ratio):
         hidden_channels = int(in_channels * hidden_ratio)
         # Padding to keep spatial size for 3×3.
         padding = kernel_size // 2
-        last_conv = nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding)
-
-        # Zero init makes the coupling start near identity for stable training
-        nn.init.zeros_(last_conv.weight)
-        nn.init.zeros_(last_conv.bias)
-
-        # Subnet refers respectively Conv, BN, ReLU, Conv
+        # Subnet: Conv → ReLU → Conv (same structure as original FastFlow)
         return nn.Sequential(
             nn.Conv2d(in_channels, hidden_channels, kernel_size, padding=padding),
-            nn.BatchNorm2d(hidden_channels),
             nn.ReLU(),
-            last_conv,
+            nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding),
         )
 
     return subnet_conv
@@ -90,28 +83,10 @@ class AnomalyMapGenerator(nn.Module):
     Generates pixel-level anomaly heatmap
     """
 
-    def __init__(self, input_size, sigma=1.5):
+    def __init__(self, input_size):
         super().__init__()
         # check input size is a tuple
         self.input_size = tuple(input_size) if not isinstance(input_size, tuple) else input_size
-        # Store Gaussian kernel as a buffer
-        self.register_buffer("_gauss_kernel", self._make_gaussian_kernel(sigma))
-
-    @staticmethod
-    def _make_gaussian_kernel(sigma, channels=1):
-        """Builds fixed 2D Gaussian filter"""
-        # Kernel size
-        kernel_size = 2 * int(4.0 * sigma + 0.5) + 1
-        # Centered coordinate vector
-        x = torch.arange(kernel_size, dtype=torch.float32) - kernel_size // 2
-        # 1D Gaussian values
-        gauss_1d = torch.exp(-0.5 * (x / sigma) ** 2)
-        # Creates 2D kernel via outer product
-        gauss_2d = gauss_1d[:, None] * gauss_1d[None, :]
-        # Normalize to sum=1
-        gauss_2d = gauss_2d / gauss_2d.sum()
-        # Reshapes for conv2d weight format
-        return gauss_2d.view(1, 1, kernel_size, kernel_size).repeat(channels, 1, 1, 1)
 
     def forward(self, hidden_variables):
         # Collect per-scale maps
@@ -132,14 +107,7 @@ class AnomalyMapGenerator(nn.Module):
             flow_maps.append(flow_map)
         # Stack and average across scales
         flow_maps = torch.stack(flow_maps, dim=-1)
-        anomaly_map = torch.mean(flow_maps, dim=-1)
-
-        # Reflect padding before smoothing
-        pad = self._gauss_kernel.shape[-1] // 2
-        anomaly_map = F.pad(anomaly_map, (pad, pad, pad, pad), mode="reflect")
-        # Applies Gaussian smoothing and returns map
-        anomaly_map = F.conv2d(anomaly_map, self._gauss_kernel, groups=1)
-        return anomaly_map
+        return torch.mean(flow_maps, dim=-1)
 
 class FastFlowMethod:
     """
@@ -180,9 +148,8 @@ class FastFlowMethod:
         self.norms = None
         self.fast_flow_blocks = None
         self.optimizer = None
-        self.scheduler = None
         self.criterion = FastflowLoss()
-        self.anomaly_map_generator = AnomalyMapGenerator(self.input_size).to(self.device)
+        self.anomaly_map_generator = AnomalyMapGenerator(self.input_size)
 
     def _build(self, train_loader):
         """Run one forward pass to discover feature map shapes, then build NF blocks."""
@@ -233,10 +200,7 @@ class FastFlowMethod:
         params = list(self.fast_flow_blocks.parameters()) + list(self.norms.parameters())
         self.optimizer = torch.optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
 
-        # Smooth cosine LR decay
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, T_max=self.meta_epochs, eta_min=self.lr * 1e-3
-        )
+        # No LR scheduler (same as original FastFlow)
 
         # Prints verification info
         print("\n" + "=" * 60)
@@ -290,18 +254,10 @@ class FastFlowMethod:
                 # Backprop
                 self.optimizer.zero_grad()
                 loss.backward()
-                # Gradient clipping for stability
-                torch.nn.utils.clip_grad_norm_(
-                    list(self.fast_flow_blocks.parameters()) + list(self.norms.parameters()),
-                    max_norm=1.0,
-                )
-                # Update parameters
                 self.optimizer.step()
 
                 epoch_loss += loss.item()
                 batch_count += 1
-            # Step LR scheduler
-            self.scheduler.step()
 
             # print mean loss and lr
             if self.verbose:
