@@ -351,29 +351,24 @@ class ShuffleNet(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Factory functions for common ShuffleNet V1 configurations
+# Factory functions for ShuffleNet V1 configurations (from Table 1 of the paper)
+#
+# Three variants selected for benchmarking:
+#   g=1: baseline, no group conv benefit, smallest channels (144/288/576)
+#   g=3: paper's default, best accuracy/complexity trade-off (240/480/960)
+#   g=8: most aggressive grouping, widest channels (384/768/1536)
 # ---------------------------------------------------------------------------
 
 def shufflenet_g1(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=1 (no group conv in first 1x1)."""
+    """ShuffleNet with g=1 (baseline without group conv benefit)."""
     return ShuffleNet(groups=1, num_classes=num_classes, scale=scale)
 
 
-def shufflenet_g2(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=2."""
-    return ShuffleNet(groups=2, num_classes=num_classes, scale=scale)
-
-
 def shufflenet_g3(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=3 (default configuration from the paper)."""
+    """ShuffleNet with g=3 (paper's default, best accuracy/complexity trade-off)."""
     return ShuffleNet(groups=3, num_classes=num_classes, scale=scale)
 
 
-def shufflenet_g4(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=4."""
-    return ShuffleNet(groups=4, num_classes=num_classes, scale=scale)
-
-
 def shufflenet_g8(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
-    """ShuffleNet with g=8."""
+    """ShuffleNet with g=8 (most aggressive grouping, widest channels)."""
     return ShuffleNet(groups=8, num_classes=num_classes, scale=scale)

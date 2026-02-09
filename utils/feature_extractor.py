@@ -32,19 +32,13 @@ LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
     "mobilevit_s": BackboneSpec(source="timm", name="mobilevit_s", out_indices=(1, 2, 3)),
 
     # ShuffleNet V1 (custom implementation, not available in timm/torchvision)
-    # Groups control the number of group convolutions (g=1,2,3,4,8 from the paper)
-    # g=3 is the default configuration from the paper (best accuracy/complexity trade-off)
+    # Three configurations from the original paper (Table 1, Zhang et al. 2017):
+    #   g=1: baseline without group conv (smallest channels: 144/288/576)
+    #   g=3: paper's default, best accuracy/complexity trade-off (240/480/960)
+    #   g=8: most aggressive grouping, highest channels (384/768/1536)
     "shufflenet_g1": BackboneSpec(source="custom_shufflenet", name="shufflenet_g1"),
-    "shufflenet_g2": BackboneSpec(source="custom_shufflenet", name="shufflenet_g2"),
     "shufflenet_g3": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3"),
-    "shufflenet_g4": BackboneSpec(source="custom_shufflenet", name="shufflenet_g4"),
     "shufflenet_g8": BackboneSpec(source="custom_shufflenet", name="shufflenet_g8"),
-
-    # ShuffleNet V1 scaled variants (width multipliers)
-    # x0.25 gives channels comparable to MobileNetV3 (~60/120/240) for lightweight FastFlow
-    "shufflenet_g3_x0_25": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3_x0_25"),
-    "shufflenet_g3_x0_5": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3_x0_5"),
-    "shufflenet_g3_x2_0": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3_x2_0"),
 
 }
 
@@ -138,15 +132,11 @@ class _ShuffleNetFeaturesOnly(nn.Module):
     """
 
     # Map of model name -> (groups, scale)
+    # Three configurations from the original ShuffleNet V1 paper (Table 1)
     _CONFIGS = {
         "shufflenet_g1":        (1, 1.0),
-        "shufflenet_g2":        (2, 1.0),
         "shufflenet_g3":        (3, 1.0),
-        "shufflenet_g4":        (4, 1.0),
         "shufflenet_g8":        (8, 1.0),
-        "shufflenet_g3_x0_25":  (3, 0.25),
-        "shufflenet_g3_x0_5":   (3, 0.5),
-        "shufflenet_g3_x2_0":   (3, 2.0),
     }
 
     def __init__(self, model_name: str) -> None:

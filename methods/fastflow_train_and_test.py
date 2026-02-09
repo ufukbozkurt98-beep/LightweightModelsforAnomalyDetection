@@ -27,16 +27,12 @@ def train_and_test_fastflow(
 ):
     """
     Train and test FastFlow, return scores, anomaly maps and metrics.
-
-    Parameters follow the same naming convention as train_and_test_cflow().
-    FastFlow-specific parameters (flow_steps, conv3x3_only, hidden_ratio, clamp)
-    follow the anomalib FastflowModel defaults.
     """
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Build extractor (same as cflow_train_and_test.py)
+    # Build extractor
     extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
 
     # Build FastFlow
@@ -59,7 +55,7 @@ def train_and_test_fastflow(
     # Predict
     scores, maps = fastflow.predict(test_loader)
 
-    # Results (same metric computation as cflow_train_and_test.py)
+    # Results
     y_img, y_pix = collect_gt_from_loader(test_loader)
     img_auc = image_level_auroc(y_img, scores)
     pix_auc = pixel_level_auroc(y_pix, maps)
