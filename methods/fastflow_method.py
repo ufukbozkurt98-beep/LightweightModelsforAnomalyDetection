@@ -80,13 +80,25 @@ class FastflowLoss(nn.Module):
 class AnomalyMapGenerator(nn.Module):
     """
     Anomaly map generator
-    Generates pixel-level anomaly heatmap
+    Generates pixel-level anomaly heatmap with optional Gaussian smoothing
     """
 
-    def __init__(self, input_size):
+    def __init__(self, input_size, sigma=1.5):
         super().__init__()
         # check input size is a tuple
         self.input_size = tuple(input_size) if not isinstance(input_size, tuple) else input_size
+        # Store Gaussian kernel as a buffer for post-processing smoothing
+        self.register_buffer("_gauss_kernel", self._make_gaussian_kernel(sigma))
+
+    @staticmethod
+    def _make_gaussian_kernel(sigma, channels=1):
+        """Builds fixed 2D Gaussian filter"""
+        kernel_size = 2 * int(4.0 * sigma + 0.5) + 1
+        x = torch.arange(kernel_size, dtype=torch.float32) - kernel_size // 2
+        gauss_1d = torch.exp(-0.5 * (x / sigma) ** 2)
+        gauss_2d = gauss_1d[:, None] * gauss_1d[None, :]
+        gauss_2d = gauss_2d / gauss_2d.sum()
+        return gauss_2d.view(1, 1, kernel_size, kernel_size).repeat(channels, 1, 1, 1)
 
     def forward(self, hidden_variables):
         # Collect per-scale maps
@@ -107,7 +119,13 @@ class AnomalyMapGenerator(nn.Module):
             flow_maps.append(flow_map)
         # Stack and average across scales
         flow_maps = torch.stack(flow_maps, dim=-1)
-        return torch.mean(flow_maps, dim=-1)
+        anomaly_map = torch.mean(flow_maps, dim=-1)
+
+        # Gaussian smoothing to reduce pixel-level noise
+        pad = self._gauss_kernel.shape[-1] // 2
+        anomaly_map = F.pad(anomaly_map, (pad, pad, pad, pad), mode="reflect")
+        anomaly_map = F.conv2d(anomaly_map, self._gauss_kernel, groups=1)
+        return anomaly_map
 
 class FastFlowMethod:
     """
@@ -149,7 +167,7 @@ class FastFlowMethod:
         self.fast_flow_blocks = None
         self.optimizer = None
         self.criterion = FastflowLoss()
-        self.anomaly_map_generator = AnomalyMapGenerator(self.input_size)
+        self.anomaly_map_generator = AnomalyMapGenerator(self.input_size).to(self.device)
 
     def _build(self, train_loader):
         """Run one forward pass to discover feature map shapes, then build NF blocks."""
