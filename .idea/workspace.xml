@@ -5,20 +5,44 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="53e2a920-f20c-4546-92a1-7fb353a9c20c" name="Changes" comment="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
-      <change beforePath="$PROJECT_DIR$/.idea/LightweightModelsforAnomalyDetection.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/LightweightModelsforAnomalyDetection.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_all_reports.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_bottle_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_bottle_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_cable_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_cable_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_capsule_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_capsule_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_carpet_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_carpet_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_grid_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_grid_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_hazelnut_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_hazelnut_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_leather_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_leather_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_metal_nut_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_metal_nut_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_pill_report.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/data/reports/mvtec_pill_split.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/LICENSE" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/backbones.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/common.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/datasets/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/datasets/excel/mpdd_distribution.xlsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/datasets/excel/mvtec_distribution.xlsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/datasets/mvtec.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/figures/GLASS_schematic.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/figures/MAD-man_samples.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/figures/MAD-sys_samples.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/glass.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/loss.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/main.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/metrics.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/glass_source_code/glass_src/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/runners/glass_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/glass_runner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/runners/simplenet_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/simplenet_runner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/simplenet_code/simplenet_author/common_sn.py" beforeDir="false" afterPath="$PROJECT_DIR$/simplenet_code/simplenet_author/common_sn.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/simplenet_code/simplenet_author/metrics_sn.py" beforeDir="false" afterPath="$PROJECT_DIR$/simplenet_code/simplenet_author/metrics_sn.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/simplenet_code/simplenet_author/simplenet.py" beforeDir="false" afterPath="$PROJECT_DIR$/simplenet_code/simplenet_author/simplenet.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/simplenet_code/simplenet_author/sn_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/simplenet_code/simplenet_author/sn_utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/glass_backbone_adapter.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/glass_backbone_adapter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/glass_loader_adapter.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/glass_loader_adapter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/simplenet_dataset_adapter.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/simplenet_dataset_adapter.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -33,6 +57,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
@@ -46,13 +75,13 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.main.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "glass__tests"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\eylul\PycharmProjects\LightweightModelsforAnomalyDetection\third_party" />
@@ -92,7 +121,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-975db3bf15a3-31b6be0877a2-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-241.18034.82" />
+        <option value="bundled-python-sdk-babbdf50b680-746f403e7f0c-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-241.15989.155" />
       </set>
     </attachedChunks>
   </component>
@@ -145,7 +174,31 @@
       <option name="project" value="LOCAL" />
       <updated>1767902595002</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770075481829</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1770075481829</updated>
+    </task>
+    <task id="LOCAL-00007" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770075716459</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1770075716459</updated>
+    </task>
+    <task id="LOCAL-00008" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770661262900</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1770661262900</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">

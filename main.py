@@ -53,12 +53,17 @@ def main():
     test_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                        batch_size=BATCH_SIZE)
 
+
+
+
+
     if METHOD.lower() == "glass":
         run_glass(train_loader, val_loader, test_loader)
     elif METHOD.lower() == "simplenet":
         run_simplenet(train_loader, val_loader, test_loader)
     else:
         raise ValueError(f"Unknown METHOD: {METHOD}")
+
 
 if __name__ == "__main__":
     main()

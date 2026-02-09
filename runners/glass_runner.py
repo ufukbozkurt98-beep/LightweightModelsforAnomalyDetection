@@ -35,7 +35,7 @@ def run_glass(train_loader, val_loader, test_loader):
     mask_sums = b["mask"].sum(dim=(1, 2, 3))
     print("Mask sums (per sample):", mask_sums.tolist())
 
-    # ----------------- mobilenetv3 -----------------
+    # ----------------- lightweight backbone -----------------
     # run the model in GPU if available, otherwise run it on CPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # lightweight backbone feature extractor building
@@ -73,8 +73,8 @@ def run_glass(train_loader, val_loader, test_loader):
 
     glass.load(
         backbone=backbone,
-        #layers_to_extract_from=["l2", "l3"],  # or ["l1","l2","l3"] which layers to capture the output from
-        layers_to_extract_from=["l2", "l1", "l3"],
+        layers_to_extract_from=["l2", "l3"],  # or ["l1","l2","l3"] which layers to capture the output from
+        #layers_to_extract_from=["l2", "l1", "l3"],
         device=device,
         input_shape=[3, 256, 256],  # matching with the dataloader size
         pretrain_embed_dimension=1024,

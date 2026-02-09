@@ -1,0 +1,14 @@
+{
+  "category": "carpet",
+  "counts": {
+    "train_good": 280,
+    "test_good": 28,
+    "test_anomaly": 89
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}
