@@ -55,13 +55,6 @@ def run_simplenet(train_loader, val_loader, test_loader):
         drop_last=getattr(test_loader, "drop_last", False),
     )
 
-    print(len(val_loader.dataset))
-    b = next(iter(train_loader))
-    print("TRAIN shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-
-    b = next(iter(val_loader))
-    print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-
     b = next(iter(test_loader))
     print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
     print("TEST defect types sample:", b["defect_type"][:4])
