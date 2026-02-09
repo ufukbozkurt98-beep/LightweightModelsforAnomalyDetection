@@ -25,15 +25,11 @@ def subnet_conv_func(kernel_size, hidden_ratio):
         hidden_channels = int(in_channels * hidden_ratio)
         # Padding to keep spatial size for 3×3.
         padding = kernel_size // 2
-        last_conv = nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding)
-        # Zero-init: coupling layers start as identity transforms for stable training
-        nn.init.zeros_(last_conv.weight)
-        nn.init.zeros_(last_conv.bias)
         # Subnet: Conv → ReLU → Conv (same structure as original FastFlow)
         return nn.Sequential(
             nn.Conv2d(in_channels, hidden_channels, kernel_size, padding=padding),
             nn.ReLU(),
-            last_conv,
+            nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding),
         )
 
     return subnet_conv

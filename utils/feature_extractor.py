@@ -31,11 +31,7 @@ LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
     "mobilevit_xs": BackboneSpec(source="timm", name="mobilevit_xs", out_indices=(1, 2, 3)),
     "mobilevit_s": BackboneSpec(source="timm", name="mobilevit_s", out_indices=(1, 2, 3)),
 
-    # ShuffleNet V1 (custom implementation, not available in timm/torchvision)
-    # Three configurations from the original paper (Table 1, Zhang et al. 2017):
-    #   g=1: baseline without group conv (smallest channels: 144/288/576)
-    #   g=3: paper's default, best accuracy/complexity trade-off (240/480/960)
-    #   g=8: most aggressive grouping, highest channels (384/768/1536)
+    # ShuffleNet
     "shufflenet_g1": BackboneSpec(source="custom_shufflenet", name="shufflenet_g1"),
     "shufflenet_g3": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3"),
     "shufflenet_g8": BackboneSpec(source="custom_shufflenet", name="shufflenet_g8"),
@@ -125,14 +121,13 @@ class _TimmFeaturesOnly(nn.Module):
 
 class _ShuffleNetFeaturesOnly(nn.Module):
     """
-    Extract multi-scale features using our custom ShuffleNet V1 implementation.
-
-    Uses forward_features() to return {"l1", "l2", "l3"} from stage2, stage3, stage4.
-    No pretrained weights are available (ShuffleNet V1 is trained from scratch).
+    Extract multi-scale features using ShuffleNet implementation
+    return {"l1", "l2", "l3"} from stage2, stage3, stage4
+    No pretrained weights are available
     """
 
-    # Map of model name -> (groups, scale)
-    # Three configurations from the original ShuffleNet V1 paper (Table 1)
+    # Map of model name
+    # Three configurations from the original ShuffleNet paper
     _CONFIGS = {
         "shufflenet_g1":        (1, 1.0),
         "shufflenet_g3":        (3, 1.0),
@@ -151,7 +146,7 @@ class _ShuffleNetFeaturesOnly(nn.Module):
 
         groups, scale = self._CONFIGS[model_name]
 
-        # num_classes=0 disables the classifier head (we only need features)
+        # num_classes=0 disables the classifier head since we only need features
         self.backbone = ShuffleNet(groups=groups, num_classes=0, scale=scale)
 
         # Store feature channel counts for each level
@@ -160,7 +155,7 @@ class _ShuffleNetFeaturesOnly(nn.Module):
         }
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        # Extract multi-scale features using forward_features()
+        # Extract multi-scale features
         return self.backbone.forward_features(x)
 
 
