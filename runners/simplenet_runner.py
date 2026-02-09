@@ -66,7 +66,7 @@ def run_simplenet(train_loader, val_loader, test_loader):
     print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
     print("TEST defect types sample:", b["defect_type"][:4])
 
-    # -------- mobilev3net stuff ------
+    # -------- lightweight stuff ------
     # get a batch to do mask check
     b = next(iter(test_loader))
     mask_sums = b["mask"].sum(dim=(1, 2, 3))
@@ -115,11 +115,11 @@ def run_simplenet(train_loader, val_loader, test_loader):
         layers_to_extract_from=["l2", "l3"],
         device=device,
         input_shape=[3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE],
-        pretrain_embed_dimension=1536,
-        target_embed_dimension=1536,
+        pretrain_embed_dimension=512,
+        target_embed_dimension=512,
         patchsize=3,
         patchstride=1,
-        meta_epochs=200,
+        meta_epochs=40,
         gan_epochs=4,
         aed_meta_epochs=1,
         dsc_layers=2,
