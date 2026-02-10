@@ -175,7 +175,6 @@ import torch
 class DictFeatureAggregator(torch.nn.Module):
     """
     For backbones that already return a dict of features:
-    e.g. your extractor returns {"l1","l2","l3"}.
     """
 
     def __init__(self, backbone, layers_to_extract_from, device, train_backbone=False):
