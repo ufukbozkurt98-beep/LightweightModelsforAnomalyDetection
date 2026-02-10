@@ -104,12 +104,12 @@ def run_simplenet(train_loader, val_loader, test_loader):
     sn = SimpleNet(device)
     sn.load(
         backbone=extractor,
-        # layers_to_extract_from=["l1", "l2", "l3"],
-        layers_to_extract_from=["l2", "l3"],
+        layers_to_extract_from=["l1", "l2", "l3"],
+        #layers_to_extract_from=["l2", "l3"],
         device=device,
         input_shape=[3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE],
-        pretrain_embed_dimension=1536,
-        target_embed_dimension=1536,
+        pretrain_embed_dimension=256,
+        target_embed_dimension=256,
         patchsize=3,
         patchstride=1,
         meta_epochs=40,
