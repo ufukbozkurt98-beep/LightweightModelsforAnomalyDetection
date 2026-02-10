@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# to build normalizing flows (invertible networks).
+# to build normalizing flows
 import FrEIA.framework as Ff
 import FrEIA.modules as Fm
 
@@ -25,7 +25,7 @@ def subnet_conv_func(kernel_size, hidden_ratio):
         hidden_channels = int(in_channels * hidden_ratio)
         # Padding to keep spatial size for 3×3.
         padding = kernel_size // 2
-        # Subnet: Conv → ReLU → Conv (same structure as original FastFlow)
+        # Subnet: Conv → ReLU → Conv
         return nn.Sequential(
             nn.Conv2d(in_channels, hidden_channels, kernel_size, padding=padding),
             nn.ReLU(),
@@ -217,8 +217,6 @@ class FastFlowMethod:
         # Optimize NF block and LayerNorm parameters, backbone is still frozen
         params = list(self.fast_flow_blocks.parameters()) + list(self.norms.parameters())
         self.optimizer = torch.optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
-
-        # No LR scheduler (same as original FastFlow)
 
         # Prints verification info
         print("\n" + "=" * 60)
