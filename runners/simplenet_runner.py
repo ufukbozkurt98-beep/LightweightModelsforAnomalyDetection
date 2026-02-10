@@ -118,7 +118,10 @@ def run_simplenet(train_loader, val_loader, test_loader):
         dsc_layers=2,
         dsc_hidden=1024,
         train_backbone=False,
-        noise_std=0.015,  # to match the paper's parameters
+        noise_std=0.05,
+        dsc_lr=0.0001,       
+        lr=0.0001,           
+        dsc_margin=0.5,      
     )
 
     sn.set_model_dir(str(REPORTS_DIR / "simplenet_runs"), CATEGORY)
