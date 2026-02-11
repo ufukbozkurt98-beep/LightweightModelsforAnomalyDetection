@@ -36,6 +36,13 @@ LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
     "shufflenet_g3": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3"),
     "shufflenet_g8": BackboneSpec(source="custom_shufflenet", name="shufflenet_g8"),
 
+    # MobileFormer (CVPR 2022)
+    "mobileformer_508m": BackboneSpec(source="custom_mobileformer", name="mobileformer_508m"),
+    "mobileformer_294m": BackboneSpec(source="custom_mobileformer", name="mobileformer_294m"),
+    "mobileformer_214m": BackboneSpec(source="custom_mobileformer", name="mobileformer_214m"),
+    "mobileformer_151m": BackboneSpec(source="custom_mobileformer", name="mobileformer_151m"),
+    "mobileformer_96m": BackboneSpec(source="custom_mobileformer", name="mobileformer_96m"),
+    "mobileformer_52m": BackboneSpec(source="custom_mobileformer", name="mobileformer_52m"),
 }
 
 
@@ -59,6 +66,8 @@ class MultiScaleFeatureExtractor(nn.Module):
             self._impl = _TimmFeaturesOnly(spec.name, out_indices=spec.out_indices, pretrained=pretrained)
         elif spec.source == "custom_shufflenet":
             self._impl = _ShuffleNetFeaturesOnly(spec.name)
+        elif spec.source == "custom_mobileformer":
+            self._impl = _MobileFormerFeaturesOnly(spec.name)
         else:
             raise ValueError(f"Unknown backbone source: {spec.source}")
 
@@ -156,6 +165,44 @@ class _ShuffleNetFeaturesOnly(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         # Extract multi-scale features
+        return self.backbone.forward_features(x)
+
+
+class _MobileFormerFeaturesOnly(nn.Module):
+    """
+    Extract multi-scale features using MobileFormer (CVPR 2022).
+    Returns {"l1", "l2", "l3"} from the first three stride-2 stages.
+    No pretrained weights (trained from scratch).
+    """
+
+    _CONFIGS = {
+        "mobileformer_508m",
+        "mobileformer_294m",
+        "mobileformer_214m",
+        "mobileformer_151m",
+        "mobileformer_96m",
+        "mobileformer_52m",
+    }
+
+    def __init__(self, model_name: str) -> None:
+        super().__init__()
+        from utils.mobileformer.mobile_former import _build_mobile_former
+
+        if model_name not in self._CONFIGS:
+            raise ValueError(
+                f"Unknown MobileFormer config '{model_name}'. "
+                f"Available: {sorted(self._CONFIGS)}"
+            )
+
+        # num_classes=0 disables the classifier head
+        self.backbone = _build_mobile_former(model_name, num_classes=0)
+
+        # Store feature channel counts for each level
+        self.feature_channels = {
+            f"l{i+1}": c for i, c in enumerate(self.backbone.stage_out_channels)
+        }
+
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         return self.backbone.forward_features(x)
 
 
