@@ -166,6 +166,58 @@ def run_all_benchmarks(
     }
 
 
+def measure_inference_latency(predict_fn, test_loader, device: str = "cpu") -> dict:
+    """
+    Measure real end-to-end inference latency by timing the predict function.
+
+    Runs predict() on the full test set and computes per-image latency.
+
+    Args:
+        predict_fn: callable that takes a test_loader and returns (scores, maps)
+        test_loader: the test DataLoader
+        device: "cpu" or "cuda" (used for cuda synchronization)
+
+    Returns dict with:
+        total_time_s: float     — total prediction time in seconds
+        num_images: int         — number of test images
+        per_image_ms: float     — average latency per image in ms
+    """
+    use_cuda = device.startswith("cuda") and torch.cuda.is_available()
+
+    # Count total images in test set
+    num_images = len(test_loader.dataset)
+
+    if use_cuda:
+        torch.cuda.synchronize()
+
+    t0 = time.perf_counter()
+    scores, maps = predict_fn(test_loader)
+    if use_cuda:
+        torch.cuda.synchronize()
+    t1 = time.perf_counter()
+
+    total_s = t1 - t0
+    per_image_ms = (total_s / num_images) * 1000.0
+
+    return {
+        "total_time_s": round(total_s, 3),
+        "num_images": num_images,
+        "per_image_ms": round(per_image_ms, 2),
+    }, scores, maps
+
+
+def print_inference_latency(results: dict, device: str = "cpu") -> None:
+    """Pretty-print inference latency results."""
+    print(f"\n{'=' * 60}")
+    print(f"Inference Latency ({device})")
+    print(f"{'=' * 60}")
+    print(f"  Total time         : {results['total_time_s']:.3f} s")
+    print(f"  Number of images   : {results['num_images']}")
+    print(f"  Per-image latency  : {results['per_image_ms']:.2f} ms")
+    print(f"  Throughput         : {1000.0 / results['per_image_ms']:.1f} img/s")
+    print(f"{'=' * 60}\n")
+
+
 def print_benchmark_results(results: dict, label: str = "Model") -> None:
     """Pretty-print benchmark results."""
     print(f"\n{'=' * 60}")

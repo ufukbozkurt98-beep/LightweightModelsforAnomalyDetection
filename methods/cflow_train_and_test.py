@@ -8,7 +8,7 @@ from utils.eval_metrics_cflow import (
     pixel_level_auroc,
     aupro,
 )
-from utils.benchmark import run_all_benchmarks, print_benchmark_results
+from utils.benchmark import run_all_benchmarks, print_benchmark_results, measure_inference_latency, print_inference_latency
 
 
 def train_and_test_cflow(
@@ -55,8 +55,9 @@ def train_and_test_cflow(
     # Train
     cflow.fit(train_loader)
 
-    # Predict
-    scores, maps = cflow.predict(test_loader)
+    # Predict with inference latency measurement
+    inference_bench, scores, maps = measure_inference_latency(cflow.predict, test_loader, device=device)
+    print_inference_latency(inference_bench, device=device)
 
     # Results
     y_img, y_pix = collect_gt_from_loader(test_loader)
@@ -69,6 +70,7 @@ def train_and_test_cflow(
         "pixel_auroc": float(pix_auc),
         "aupro_0.3": float(pro),
         "backbone_benchmark": backbone_bench,
+        "inference_benchmark": inference_bench,
     }
     print(f"Image-level AUROC%: {metrics['image_auroc'] * 100:.2f}")
     print(f"Pixel-level AUROC%: {metrics['pixel_auroc'] * 100:.2f}")
