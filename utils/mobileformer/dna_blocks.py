@@ -1,10 +1,7 @@
-"""DNA blocks for Mobile-Former.
-
-Ported from the official implementation:
-  https://github.com/AAboys/MobileFormer
-
-Paper: Mobile-Former: Bridging MobileNet and Transformer (CVPR 2022)
-       https://arxiv.org/abs/2108.05895
+"""
+DNA blocks for Mobile-Former (CVPR 2022)
+Ported from: https://github.com/AAboys/MobileFormer
+Paper: https://arxiv.org/abs/2108.05895
 """
 
 from __future__ import annotations
@@ -16,11 +13,8 @@ import torch.nn.functional as F
 from timm.layers import DropPath
 
 
-# ---------------------------------------------------------------------------
-# Utility
-# ---------------------------------------------------------------------------
-
 def _make_divisible(v, divisor, min_value=None):
+    """Make value divisible by divisor (from TF slim)."""
     if min_value is None:
         min_value = divisor
     new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
@@ -29,9 +23,7 @@ def _make_divisible(v, divisor, min_value=None):
     return new_v
 
 
-# ---------------------------------------------------------------------------
-# Activations
-# ---------------------------------------------------------------------------
+# Activation functions
 
 class h_sigmoid(nn.Module):
     def __init__(self, inplace=True, h_max=1):
@@ -66,7 +58,8 @@ class ChannelShuffle(nn.Module):
 
 
 class DyReLU(nn.Module):
-    """Dynamic ReLU.
+    """
+    Dynamic ReLU
     num_func: -1=none, 0=relu, 1=SE, 2=dy-relu
     """
 
@@ -86,10 +79,10 @@ class DyReLU(nn.Module):
 
         out = self.act(out)
 
-        if self.num_func == 1:
+        if self.num_func == 1:  # SE gating
             a = a * self.scale
             out = out * a
-        elif self.num_func == 2:
+        elif self.num_func == 2:  # Dynamic ReLU
             _, C, _, _ = a.shape
             a1, a2 = torch.split(a, [C // 2, C // 2], dim=1)
             a1 = (a1 - 0.5) * self.scale + 1.0
@@ -99,9 +92,7 @@ class DyReLU(nn.Module):
         return out
 
 
-# ---------------------------------------------------------------------------
-# Hyper-function (token → activation params)
-# ---------------------------------------------------------------------------
+# Token -> activation parameter generator
 
 class HyperFunc(nn.Module):
     def __init__(self, token_dim, oup, sel_token_id=0, reduction_ratio=4):
@@ -120,10 +111,10 @@ class HyperFunc(nn.Module):
             x, attn = x
 
         if self.sel_token_id == -1:
-            hp = self.hyper(x).permute(1, 2, 0)  # bs x hyper_dim x T
+            hp = self.hyper(x).permute(1, 2, 0)
             bs, T, H, W = attn.shape
             attn = attn.view(bs, T, H * W)
-            hp = torch.matmul(hp, attn)  # bs x hyper_dim x HW
+            hp = torch.matmul(hp, attn)
             h = hp.view(bs, -1, H, W)
         else:
             t = x[self.sel_token_id]
@@ -131,10 +122,6 @@ class HyperFunc(nn.Module):
             h = torch.unsqueeze(torch.unsqueeze(h, 2), 3)
         return h
 
-
-# ---------------------------------------------------------------------------
-# Max Depth Conv
-# ---------------------------------------------------------------------------
 
 class MaxDepthConv(nn.Module):
     def __init__(self, inp, oup, stride):
@@ -152,11 +139,11 @@ class MaxDepthConv(nn.Module):
         return torch.max(self.conv1(x), self.conv2(x))
 
 
-# ---------------------------------------------------------------------------
-# Local ↔ Global bridges
-# ---------------------------------------------------------------------------
+# Local <-> Global bridges
 
 class Local2Global(nn.Module):
+    """CNN features -> token representations"""
+
     def __init__(
         self,
         inp,
@@ -239,6 +226,8 @@ class Local2Global(nn.Module):
 
 
 class GlobalBlock(nn.Module):
+    """Token self-attention / MLP"""
+
     def __init__(
         self,
         block_type="mlp",
@@ -321,6 +310,8 @@ class GlobalBlock(nn.Module):
 
 
 class Global2Local(nn.Module):
+    """Token representations -> CNN features"""
+
     def __init__(
         self,
         inp,
@@ -395,12 +386,10 @@ class Global2Local(nn.Module):
         return out
 
 
-# ---------------------------------------------------------------------------
 # DNA Blocks
-# ---------------------------------------------------------------------------
 
 class DnaBlock3(nn.Module):
-    """DNA block variant 3: dw→pw→dw→pw with L2G/G2G/G2L bridges."""
+    """DNA block variant: dw -> pw -> dw -> pw with L2G/G2G/G2L bridges"""
 
     def __init__(
         self,
@@ -442,6 +431,7 @@ class DnaBlock3(nn.Module):
         self.use_conv_alone = False
 
         if e1 == 1 or e2 == 0:
+            # Simple conv path, no bridges
             self.use_conv_alone = True
             if dw_conv == "dw":
                 self.conv = nn.Sequential(
@@ -468,6 +458,7 @@ class DnaBlock3(nn.Module):
             hidden_dim1 = round(inp * e1)
             hidden_dim2 = round(oup * e2)
 
+            # Conv1: depthwise
             if dw_conv == "dw":
                 self.conv1 = nn.Sequential(
                     nn.Conv2d(inp, hidden_dim1, k1, stride, k1 // 2, groups=inp, bias=False),
@@ -496,12 +487,14 @@ class DnaBlock3(nn.Module):
                 else nn.Sequential()
             )
 
+            # Conv2: pointwise
             self.conv2 = nn.Sequential(
                 nn.Conv2d(hidden_dim1, oup, 1, 1, 0, groups=group_num, bias=False),
                 nn.BatchNorm2d(oup),
             )
             self.act2 = DyReLU(num_func=-1, scale=2.0)
 
+            # Conv3: depthwise
             if dw_conv == "dw":
                 self.conv3 = nn.Sequential(
                     nn.Conv2d(oup, hidden_dim2, k2, 1, k2 // 2, groups=oup, bias=False),
@@ -527,6 +520,7 @@ class DnaBlock3(nn.Module):
                 else nn.Sequential()
             )
 
+            # Conv4: pointwise
             self.conv4 = nn.Sequential(
                 nn.Conv2d(hidden_dim2, oup, 1, 1, 0, groups=group_num, bias=False),
                 nn.BatchNorm2d(oup),
@@ -541,39 +535,23 @@ class DnaBlock3(nn.Module):
 
             self.drop_path = DropPath(cnn_drop_path_rate)
 
-            # L2G, G2G, G2L
+            # L2G, G2G, G2L bridges
             self.local_global = Local2Global(
-                inp,
-                block_type=gbr_type,
-                token_dim=token_dim,
-                token_num=token_num,
-                inp_res=inp_res,
-                use_dynamic=gbr_dynamic[0],
-                norm_pos=norm_pos,
-                drop_path_rate=drop_path_rate,
-                attn_num_heads=attn_num_heads,
+                inp, block_type=gbr_type, token_dim=token_dim, token_num=token_num,
+                inp_res=inp_res, use_dynamic=gbr_dynamic[0], norm_pos=norm_pos,
+                drop_path_rate=drop_path_rate, attn_num_heads=attn_num_heads,
                 remove_proj_local=remove_proj_local,
             )
             self.global_block = GlobalBlock(
-                block_type=gbr_type,
-                token_dim=token_dim,
-                token_num=token_num,
-                mlp_token_exp=mlp_token_exp,
-                use_dynamic=gbr_dynamic[1],
-                use_ffn=gbr_ffn,
-                norm_pos=norm_pos,
-                drop_path_rate=drop_path_rate,
+                block_type=gbr_type, token_dim=token_dim, token_num=token_num,
+                mlp_token_exp=mlp_token_exp, use_dynamic=gbr_dynamic[1],
+                use_ffn=gbr_ffn, norm_pos=norm_pos, drop_path_rate=drop_path_rate,
             )
             oup_res = inp_res // (stride * stride)
             self.global_local = Global2Local(
-                oup,
-                oup_res,
-                block_type=gbr_type,
-                token_dim=token_dim,
-                token_num=token_num,
-                use_dynamic=gbr_dynamic[2],
-                drop_path_rate=drop_path_rate,
-                attn_num_heads=attn_num_heads,
+                oup, oup_res, block_type=gbr_type, token_dim=token_dim,
+                token_num=token_num, use_dynamic=gbr_dynamic[2],
+                drop_path_rate=drop_path_rate, attn_num_heads=attn_num_heads,
                 remove_proj_local=remove_proj_local,
             )
 
@@ -582,9 +560,11 @@ class DnaBlock3(nn.Module):
         if self.use_conv_alone:
             out = self.conv(features)
         else:
+            # Local to global
             tokens, attn = self.local_global((features, tokens))
             tokens = self.global_block(tokens)
 
+            # Conv path: dw -> pw -> dw -> pw
             out = self.conv1(features)
 
             if self.hyper_token_id == -1:
@@ -619,8 +599,11 @@ class DnaBlock3(nn.Module):
                 out = self.act4(out)
 
             out = self.drop_path(out) + out_cp
+
+            # Global to local
             out = self.global_local((out, tokens))
 
+        # Skip connection
         if self.identity:
             out = out + features
 
@@ -628,7 +611,7 @@ class DnaBlock3(nn.Module):
 
 
 class DnaBlock(nn.Module):
-    """DNA block: pw→dw→pw with L2G/G2G/G2L bridges."""
+    """DNA block: pw -> dw -> pw with L2G/G2G/G2L bridges"""
 
     def __init__(
         self,
@@ -671,6 +654,7 @@ class DnaBlock(nn.Module):
         self.use_conv_alone = False
 
         if e1 == 1 or e2 == 0:
+            # Simple conv, no bridges
             self.use_conv_alone = True
             self.conv = nn.Sequential(
                 nn.Conv2d(inp, inp * e1, 3, stride, 1, groups=inp, bias=False),
@@ -685,6 +669,7 @@ class DnaBlock(nn.Module):
             self.se_flag = se_flag
             hidden_dim = round(inp * e1)
 
+            # Conv1: pointwise expand
             self.conv1 = nn.Sequential(
                 nn.Conv2d(inp, hidden_dim, 1, 1, 0, groups=group_num, bias=False),
                 nn.BatchNorm2d(hidden_dim),
@@ -699,6 +684,7 @@ class DnaBlock(nn.Module):
                 else nn.Sequential()
             )
 
+            # Conv2: depthwise
             self.conv2 = nn.Sequential(
                 nn.Conv2d(hidden_dim, hidden_dim, k1, stride, k1 // 2, groups=hidden_dim, bias=False),
                 nn.BatchNorm2d(hidden_dim),
@@ -711,6 +697,7 @@ class DnaBlock(nn.Module):
                 else nn.Sequential()
             )
 
+            # Conv3: pointwise project
             self.conv3 = nn.Sequential(
                 nn.Conv2d(hidden_dim, oup, 1, 1, 0, groups=group_num, bias=False),
                 nn.BatchNorm2d(oup),
@@ -726,39 +713,23 @@ class DnaBlock(nn.Module):
 
             self.drop_path = DropPath(cnn_drop_path_rate)
 
-            # L2G, G2G, G2L
+            # L2G, G2G, G2L bridges
             self.local_global = Local2Global(
-                inp,
-                block_type=gbr_type,
-                token_dim=token_dim,
-                token_num=token_num,
-                inp_res=inp_res,
-                use_dynamic=gbr_dynamic[0],
-                norm_pos=norm_pos,
-                drop_path_rate=drop_path_rate,
-                attn_num_heads=attn_num_heads,
+                inp, block_type=gbr_type, token_dim=token_dim, token_num=token_num,
+                inp_res=inp_res, use_dynamic=gbr_dynamic[0], norm_pos=norm_pos,
+                drop_path_rate=drop_path_rate, attn_num_heads=attn_num_heads,
                 remove_proj_local=remove_proj_local,
             )
             self.global_block = GlobalBlock(
-                block_type=gbr_type,
-                token_dim=token_dim,
-                token_num=token_num,
-                mlp_token_exp=mlp_token_exp,
-                use_dynamic=gbr_dynamic[1],
-                use_ffn=gbr_ffn,
-                norm_pos=norm_pos,
-                drop_path_rate=drop_path_rate,
+                block_type=gbr_type, token_dim=token_dim, token_num=token_num,
+                mlp_token_exp=mlp_token_exp, use_dynamic=gbr_dynamic[1],
+                use_ffn=gbr_ffn, norm_pos=norm_pos, drop_path_rate=drop_path_rate,
             )
             oup_res = inp_res // (stride * stride)
             self.global_local = Global2Local(
-                oup,
-                oup_res,
-                block_type=gbr_type,
-                token_dim=token_dim,
-                token_num=token_num,
-                use_dynamic=gbr_dynamic[2],
-                drop_path_rate=drop_path_rate,
-                attn_num_heads=attn_num_heads,
+                oup, oup_res, block_type=gbr_type, token_dim=token_dim,
+                token_num=token_num, use_dynamic=gbr_dynamic[2],
+                drop_path_rate=drop_path_rate, attn_num_heads=attn_num_heads,
                 remove_proj_local=remove_proj_local,
             )
 
@@ -769,9 +740,11 @@ class DnaBlock(nn.Module):
             if self.identity:
                 out = self.drop_path(out) + features
         else:
+            # Local to global
             tokens, attn = self.local_global((features, tokens))
             tokens = self.global_block(tokens)
 
+            # Conv path: pw -> dw -> pw
             out = self.conv1(features)
 
             if self.hyper_token_id == -1:
@@ -801,6 +774,7 @@ class DnaBlock(nn.Module):
             else:
                 out = self.act3(out)
 
+            # Global to local + skip connection
             if self.gbr_before_skip:
                 out = self.global_local((out, tokens))
                 if self.identity:
@@ -813,11 +787,11 @@ class DnaBlock(nn.Module):
         return (out, tokens)
 
 
-# ---------------------------------------------------------------------------
-# Classifier (kept for completeness, not used in feature extraction)
-# ---------------------------------------------------------------------------
+# Classifier head (not used in feature extraction mode)
 
 class MergeClassifier(nn.Module):
+    """Classification head that merges CNN features and tokens"""
+
     def __init__(
         self,
         inp,
@@ -856,6 +830,7 @@ class MergeClassifier(nn.Module):
 
         self.avgpool = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)), h_swish())
 
+        # Token dimension for concatenation
         if cls_token_num > 0:
             cat_token_dim = token_dim * cls_token_num
         elif cls_token_num == 0:
@@ -893,6 +868,7 @@ class MergeClassifier(nn.Module):
             for i in range(self.cls_token_num):
                 ps.append(tokens[i])
 
+        # Branch dropout during training
         if self.training and self.drop_branch[0] + self.drop_branch[1] > 1e-8:
             rd = torch.rand((x.shape[0], 1), dtype=x.dtype, device=x.device)
             keep_local = 1 - self.drop_branch[0]

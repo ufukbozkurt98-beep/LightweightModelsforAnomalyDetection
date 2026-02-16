@@ -21,7 +21,6 @@ BACKBONE_KEY = "mobilenetv3_large"
 #BACKBONE_KEY = "shufflenet_g8"  # ShuffleNet V1 g=8: most aggressive (384/768/1536 ch)
 #BACKBONE_KEY = "mobileformer_508m"  # MobileFormer 508M FLOPs (14.0M params)
 #BACKBONE_KEY = "mobileformer_294m"  # MobileFormer 294M FLOPs (11.4M params)
-#BACKBONE_KEY = "mobileformer_96m"   # MobileFormer 96M FLOPs (4.6M params)
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
 #METHOD = "cflow"
 #METHOD = "simplenet"

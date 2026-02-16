@@ -1,10 +1,7 @@
-"""Mobile-Former model with multi-scale feature extraction.
-
-Ported from the official implementation:
-  https://github.com/AAboys/MobileFormer
-
-Paper: Mobile-Former: Bridging MobileNet and Transformer (CVPR 2022)
-       https://arxiv.org/abs/2108.05895
+"""
+Mobile-Former (CVPR 2022) - CNN + Transformer hybrid
+Ported from: https://github.com/AAboys/MobileFormer
+Paper: https://arxiv.org/abs/2108.05895
 """
 
 from __future__ import annotations
@@ -23,9 +20,7 @@ from .dna_blocks import (
     _make_divisible,
 )
 
-# ---------------------------------------------------------------------------
-# Common kwargs shared by all variants
-# ---------------------------------------------------------------------------
+# Shared config across all variants
 _COMMON_KWARGS = dict(
     cnn_drop_path_rate=0.1,
     dw_conv="dw",
@@ -43,12 +38,8 @@ _COMMON_KWARGS = dict(
     remove_proj_local=True,
 )
 
-# ---------------------------------------------------------------------------
-# Variant configurations
-#   Each entry: (stem_chs, token_num, token_dim, num_features, block_args, extra_kwargs)
-#   block_args rows: [block_cls_name, e1, channels, repeat, stride, e2]
-# ---------------------------------------------------------------------------
-
+# Variant configs
+# block_args rows: [block_class, expansion1, channels, repeat, stride, expansion2]
 _VARIANT_CONFIGS = {
     "mobileformer_508m": dict(
         stem_chs=24,
@@ -90,63 +81,6 @@ _VARIANT_CONFIGS = {
             ["DnaBlock", 6, 192, 1, 1, 4],
         ],
     ),
-    "mobileformer_214m": dict(
-        stem_chs=12,
-        token_num=6,
-        token_dim=192,
-        num_features=1600,
-        block_args=[
-            ["DnaBlock3", 2, 12, 1, 1, 0],
-            ["DnaBlock3", 6, 20, 1, 2, 4],
-            ["DnaBlock", 3, 20, 1, 1, 4],
-            ["DnaBlock3", 6, 40, 1, 2, 4],
-            ["DnaBlock", 4, 40, 1, 1, 4],
-            ["DnaBlock3", 6, 80, 1, 2, 4],
-            ["DnaBlock", 4, 80, 1, 1, 4],
-            ["DnaBlock", 6, 112, 1, 1, 4],
-            ["DnaBlock", 6, 112, 1, 1, 4],
-            ["DnaBlock3", 6, 160, 1, 2, 4],
-            ["DnaBlock", 6, 160, 1, 1, 4],
-            ["DnaBlock", 6, 160, 1, 1, 4],
-        ],
-    ),
-    "mobileformer_151m": dict(
-        stem_chs=12,
-        token_num=6,
-        token_dim=192,
-        num_features=1280,
-        block_args=[
-            ["DnaBlock3", 2, 12, 1, 1, 0],
-            ["DnaBlock3", 6, 16, 1, 2, 4],
-            ["DnaBlock", 3, 16, 1, 1, 3],
-            ["DnaBlock3", 6, 32, 1, 2, 4],
-            ["DnaBlock", 3, 32, 1, 1, 3],
-            ["DnaBlock3", 6, 64, 1, 2, 4],
-            ["DnaBlock", 4, 64, 1, 1, 4],
-            ["DnaBlock", 6, 88, 1, 1, 4],
-            ["DnaBlock", 6, 88, 1, 1, 4],
-            ["DnaBlock3", 6, 128, 1, 2, 4],
-            ["DnaBlock", 6, 128, 1, 1, 4],
-            ["DnaBlock", 6, 128, 1, 1, 4],
-        ],
-    ),
-    "mobileformer_96m": dict(
-        stem_chs=12,
-        token_num=4,
-        token_dim=128,
-        num_features=1280,
-        block_args=[
-            ["DnaBlock3", 2, 12, 1, 1, 0],
-            ["DnaBlock3", 6, 16, 1, 2, 4],
-            ["DnaBlock3", 6, 32, 1, 2, 4],
-            ["DnaBlock", 3, 32, 1, 1, 3],
-            ["DnaBlock3", 6, 64, 1, 2, 4],
-            ["DnaBlock", 4, 64, 1, 1, 4],
-            ["DnaBlock", 6, 88, 1, 1, 4],
-            ["DnaBlock3", 6, 128, 1, 2, 4],
-            ["DnaBlock", 6, 128, 1, 1, 4],
-        ],
-    ),
     "mobileformer_52m": dict(
         stem_chs=8,
         token_num=3,
@@ -166,7 +100,7 @@ _VARIANT_CONFIGS = {
     ),
 }
 
-# Block class lookup (avoids eval())
+# Block class lookup (instead of eval())
 _BLOCK_CLS = {
     "DnaBlock": DnaBlock,
     "DnaBlock3": DnaBlock3,
@@ -174,10 +108,8 @@ _BLOCK_CLS = {
 
 
 class MobileFormer(nn.Module):
-    """Mobile-Former: Bridging MobileNet and Transformer.
-
-    When ``num_classes=0`` the classifier head is omitted and only
-    ``forward_features()`` is useful (returns ``{"l1", "l2", "l3"}``).
+    """
+    Full Mobile-Former network
     """
 
     def __init__(
@@ -226,10 +158,10 @@ class MobileFormer(nn.Module):
         mdiv = 8 if width_mult > 1.01 else 4
         self.num_classes = num_classes
 
-        # Global tokens
+        # Learnable global tokens
         self.tokens = nn.Embedding(token_num, token_dim)
 
-        # Stem
+        # Stem conv: 3x3 stride-2 downsample
         self.stem = nn.Sequential(
             nn.Conv2d(in_chans, stem_chs, 3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(stem_chs),
@@ -237,14 +169,12 @@ class MobileFormer(nn.Module):
         )
         input_channel = stem_chs
 
-        # Build blocks — keep as a ModuleList so we can iterate manually
-        # and capture intermediate features.
+        # Build DNA blocks as ModuleList (need manual iteration for feature tapping)
         layer_num = len(block_args)
         inp_res = img_size * img_size // 4
         layers: List[nn.Module] = []
 
-        # Track which flat-layer indices correspond to stride-2 transitions
-        # so forward_features can tap the right outputs.
+        # Track stride-2 block indices for feature extraction
         self._stride2_flat_indices: List[int] = []
         self._stage_out_channels_list: List[int] = []
         flat_idx = 0
@@ -259,6 +189,7 @@ class MobileFormer(nn.Module):
                 else _make_divisible(c * width_mult, 4)
             )
 
+            # Linearly increase drop path rate
             drop_path_prob = drop_path_rate * (idx + 1) / layer_num
             cnn_drop_path_prob = cnn_drop_path_rate * (idx + 1) / layer_num
 
@@ -299,6 +230,7 @@ class MobileFormer(nn.Module):
                 inp_res = inp_res // 4
             flat_idx += 1
 
+            # Repeat blocks (stride=1)
             for _ in range(1, n):
                 layers.append(
                     block_cls(
@@ -331,7 +263,7 @@ class MobileFormer(nn.Module):
 
         self.features = nn.ModuleList(layers)
 
-        # Last L2G bridge
+        # Final local-to-global bridge
         self.local_global = Local2Global(
             input_channel,
             block_type=gbr_type,
@@ -344,7 +276,7 @@ class MobileFormer(nn.Module):
             attn_num_heads=attn_num_heads,
         )
 
-        # Classifier (optional)
+        # Classifier head (skip if num_classes=0, we only need features)
         if num_classes > 0:
             self.classifier = MergeClassifier(
                 input_channel,
@@ -363,14 +295,11 @@ class MobileFormer(nn.Module):
         else:
             self.classifier = None
 
-        # Determine which stride-2 indices map to l1, l2, l3.
-        # We pick the 1st, 2nd, 3rd stride-2 transitions (skip the stem's stride).
-        # For 12-block variants: indices 1,3,5 → 56×56, 28×28, 14×14
-        # For 9-block variants:  indices 0,2,4 → 56×56, 28×28, 14×14
-        # We always want the first 3 stride-2 blocks.
+        # First 3 stride-2 blocks give us l1, l2, l3 feature maps
         self._tap_indices: List[int] = self._stride2_flat_indices[:3]
         self.stage_out_channels: List[int] = self._stage_out_channels_list[:3]
 
+        # Initialize weights
         self._initialize_weights()
 
     def _initialize_weights(self):
@@ -388,15 +317,9 @@ class MobileFormer(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-    # ------------------------------------------------------------------
-    # Multi-scale feature extraction (for anomaly detection backbones)
-    # ------------------------------------------------------------------
     def forward_features(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Return multi-scale features ``{"l1", "l2", "l3"}``.
-
-        l1, l2, l3 are tapped right after the 1st, 2nd, 3rd stride-2
-        blocks, yielding feature maps at roughly 1/4, 1/8, 1/16 of the
-        input spatial resolution.
+        """
+        Extract multi-scale features
         """
         bs = x.shape[0]
         z = self.tokens.weight
@@ -414,19 +337,17 @@ class MobileFormer(nn.Module):
                 tap_counter += 1
                 collected[f"l{tap_counter}"] = x
                 if tap_counter == 3:
-                    break  # no need to run remaining blocks
+                    break  # done, skip remaining blocks
 
-        # Safety: if model has fewer than 3 stride-2 blocks, fill remaining
+        # Fill remaining if fewer than 3 stride-2 blocks
         while tap_counter < 3:
             tap_counter += 1
             collected[f"l{tap_counter}"] = x
 
         return collected
 
-    # ------------------------------------------------------------------
-    # Full forward (classification)
-    # ------------------------------------------------------------------
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Full forward pass with classifier head."""
         if self.classifier is None:
             return self.forward_features(x)
 
@@ -442,18 +363,8 @@ class MobileFormer(nn.Module):
         return y
 
 
-# ---------------------------------------------------------------------------
-# Factory helpers
-# ---------------------------------------------------------------------------
-
 def _build_mobile_former(variant_name: str, num_classes: int = 0, **overrides) -> MobileFormer:
-    """Build a MobileFormer variant by name.
-
-    Args:
-        variant_name: Key in _VARIANT_CONFIGS (e.g. "mobileformer_294m").
-        num_classes: 0 → feature-only (no classifier head).
-        **overrides: Extra kwargs forwarded to MobileFormer.
-    """
+    """Build a MobileFormer variant by name."""
     cfg = _VARIANT_CONFIGS[variant_name]
 
     kwargs = dict(
@@ -475,24 +386,15 @@ def _build_mobile_former(variant_name: str, num_classes: int = 0, **overrides) -
 
 
 def mobileformer_508m(num_classes: int = 0) -> MobileFormer:
+    """MobileFormer 508M FLOPs"""
     return _build_mobile_former("mobileformer_508m", num_classes=num_classes)
 
 
 def mobileformer_294m(num_classes: int = 0) -> MobileFormer:
+    """MobileFormer 294M FLOPs"""
     return _build_mobile_former("mobileformer_294m", num_classes=num_classes)
 
 
-def mobileformer_214m(num_classes: int = 0) -> MobileFormer:
-    return _build_mobile_former("mobileformer_214m", num_classes=num_classes)
-
-
-def mobileformer_151m(num_classes: int = 0) -> MobileFormer:
-    return _build_mobile_former("mobileformer_151m", num_classes=num_classes)
-
-
-def mobileformer_96m(num_classes: int = 0) -> MobileFormer:
-    return _build_mobile_former("mobileformer_96m", num_classes=num_classes)
-
-
 def mobileformer_52m(num_classes: int = 0) -> MobileFormer:
+    """MobileFormer 52M FLOPs"""
     return _build_mobile_former("mobileformer_52m", num_classes=num_classes)

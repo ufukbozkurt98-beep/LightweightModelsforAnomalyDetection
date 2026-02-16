@@ -39,9 +39,6 @@ LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
     # MobileFormer (CVPR 2022)
     "mobileformer_508m": BackboneSpec(source="custom_mobileformer", name="mobileformer_508m"),
     "mobileformer_294m": BackboneSpec(source="custom_mobileformer", name="mobileformer_294m"),
-    "mobileformer_214m": BackboneSpec(source="custom_mobileformer", name="mobileformer_214m"),
-    "mobileformer_151m": BackboneSpec(source="custom_mobileformer", name="mobileformer_151m"),
-    "mobileformer_96m": BackboneSpec(source="custom_mobileformer", name="mobileformer_96m"),
     "mobileformer_52m": BackboneSpec(source="custom_mobileformer", name="mobileformer_52m"),
 }
 
@@ -178,9 +175,6 @@ class _MobileFormerFeaturesOnly(nn.Module):
     _CONFIGS = {
         "mobileformer_508m",
         "mobileformer_294m",
-        "mobileformer_214m",
-        "mobileformer_151m",
-        "mobileformer_96m",
         "mobileformer_52m",
     }
 
