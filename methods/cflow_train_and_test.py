@@ -8,6 +8,7 @@ from utils.eval_metrics_cflow import (
     pixel_level_auroc,
     aupro,
 )
+from utils.benchmark import run_all_benchmarks, print_benchmark_results
 
 
 def train_and_test_cflow(
@@ -31,6 +32,11 @@ def train_and_test_cflow(
 
     # Build extractor
     extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
+
+    # Benchmark backbone
+    dummy_input = torch.randn(1, 3, input_size, input_size)
+    backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
+    print_benchmark_results(backbone_bench, label=f"Backbone ({backbone_name})")
 
     # Build cflow
     cflow = CFlowMethod(
@@ -62,6 +68,7 @@ def train_and_test_cflow(
         "image_auroc": float(img_auc),
         "pixel_auroc": float(pix_auc),
         "aupro_0.3": float(pro),
+        "backbone_benchmark": backbone_bench,
     }
     print(f"Image-level AUROC%: {metrics['image_auroc'] * 100:.2f}")
     print(f"Pixel-level AUROC%: {metrics['pixel_auroc'] * 100:.2f}")
