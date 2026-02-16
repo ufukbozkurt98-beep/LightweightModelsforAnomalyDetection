@@ -5,12 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="53e2a920-f20c-4546-92a1-7fb353a9c20c" name="Changes" comment="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
-      <change afterPath="$PROJECT_DIR$/methods/fastflow_method.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/methods/fastflow_train_and_test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/feature_extractor.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/feature_extractor.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -244,7 +240,231 @@
       <option name="project" value="LOCAL" />
       <updated>1770480166966</updated>
     </task>
-    <option name="localTasksCounter" value="16" />
+    <task id="LOCAL-00016" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770595025719</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1770595025719</updated>
+    </task>
+    <task id="LOCAL-00017" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770597105134</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1770597105134</updated>
+    </task>
+    <task id="LOCAL-00018" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770642710354</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1770642710354</updated>
+    </task>
+    <task id="LOCAL-00019" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770645060249</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1770645060249</updated>
+    </task>
+    <task id="LOCAL-00020" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770657647997</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1770657647997</updated>
+    </task>
+    <task id="LOCAL-00021" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770659977661</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1770659977661</updated>
+    </task>
+    <task id="LOCAL-00022" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770660032530</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1770660032530</updated>
+    </task>
+    <task id="LOCAL-00023" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770662149852</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1770662149852</updated>
+    </task>
+    <task id="LOCAL-00024" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770662652692</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1770662652692</updated>
+    </task>
+    <task id="LOCAL-00025" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770664535386</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1770664535386</updated>
+    </task>
+    <task id="LOCAL-00026" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770664575686</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1770664575686</updated>
+    </task>
+    <task id="LOCAL-00027" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770664785232</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1770664785232</updated>
+    </task>
+    <task id="LOCAL-00028" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770665201871</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1770665201871</updated>
+    </task>
+    <task id="LOCAL-00029" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770666636218</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1770666636218</updated>
+    </task>
+    <task id="LOCAL-00030" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770669504094</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1770669504094</updated>
+    </task>
+    <task id="LOCAL-00031" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770669590154</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1770669590154</updated>
+    </task>
+    <task id="LOCAL-00032" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770671165964</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1770671165964</updated>
+    </task>
+    <task id="LOCAL-00033" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770677784242</created>
+      <option name="number" value="00033" />
+      <option name="presentableId" value="LOCAL-00033" />
+      <option name="project" value="LOCAL" />
+      <updated>1770677784242</updated>
+    </task>
+    <task id="LOCAL-00034" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770682799731</created>
+      <option name="number" value="00034" />
+      <option name="presentableId" value="LOCAL-00034" />
+      <option name="project" value="LOCAL" />
+      <updated>1770682799731</updated>
+    </task>
+    <task id="LOCAL-00035" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770847898664</created>
+      <option name="number" value="00035" />
+      <option name="presentableId" value="LOCAL-00035" />
+      <option name="project" value="LOCAL" />
+      <updated>1770847898664</updated>
+    </task>
+    <task id="LOCAL-00036" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770848430769</created>
+      <option name="number" value="00036" />
+      <option name="presentableId" value="LOCAL-00036" />
+      <option name="project" value="LOCAL" />
+      <updated>1770848430769</updated>
+    </task>
+    <task id="LOCAL-00037" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770848614289</created>
+      <option name="number" value="00037" />
+      <option name="presentableId" value="LOCAL-00037" />
+      <option name="project" value="LOCAL" />
+      <updated>1770848614289</updated>
+    </task>
+    <task id="LOCAL-00038" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770921361807</created>
+      <option name="number" value="00038" />
+      <option name="presentableId" value="LOCAL-00038" />
+      <option name="project" value="LOCAL" />
+      <updated>1770921361807</updated>
+    </task>
+    <task id="LOCAL-00039" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1770938557949</created>
+      <option name="number" value="00039" />
+      <option name="presentableId" value="LOCAL-00039" />
+      <option name="project" value="LOCAL" />
+      <updated>1770938557949</updated>
+    </task>
+    <task id="LOCAL-00040" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1771258313400</created>
+      <option name="number" value="00040" />
+      <option name="presentableId" value="LOCAL-00040" />
+      <option name="project" value="LOCAL" />
+      <updated>1771258313400</updated>
+    </task>
+    <task id="LOCAL-00041" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1771258864332</created>
+      <option name="number" value="00041" />
+      <option name="presentableId" value="LOCAL-00041" />
+      <option name="project" value="LOCAL" />
+      <updated>1771258864332</updated>
+    </task>
+    <task id="LOCAL-00042" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1771263559220</created>
+      <option name="number" value="00042" />
+      <option name="presentableId" value="LOCAL-00042" />
+      <option name="project" value="LOCAL" />
+      <updated>1771263559220</updated>
+    </task>
+    <task id="LOCAL-00043" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1771270721935</created>
+      <option name="number" value="00043" />
+      <option name="presentableId" value="LOCAL-00043" />
+      <option name="project" value="LOCAL" />
+      <updated>1771270721935</updated>
+    </task>
+    <option name="localTasksCounter" value="44" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
