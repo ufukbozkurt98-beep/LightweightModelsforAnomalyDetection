@@ -1,10 +1,10 @@
 {
-  "screw": {
-    "category": "screw",
+  "bottle": {
+    "category": "bottle",
     "counts": {
-      "train_good": 320,
-      "test_good": 41,
-      "test_anomaly": 119
+      "train_good": 209,
+      "test_good": 20,
+      "test_anomaly": 63
     },
     "issues": {
       "unreadable_images": [],
