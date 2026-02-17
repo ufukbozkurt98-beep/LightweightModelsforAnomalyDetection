@@ -14,7 +14,7 @@ NUM_WORKERS = 2
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
 #BACKBONE_KEY = "mobilenetv3_large"
 #BACKBONE_KEY = "mobilenetv3_small"
-BACKBONE_KEY = "mobilenetv3_large"
+BACKBONE_KEY = "mobilevit_s"
 #BACKBONE_KEY = "efficientnet_lite0"
 #BACKBONE_KEY = "shufflenet_g1"  # ShuffleNet V1 g=1: baseline (144/288/576 ch)
 #BACKBONE_KEY = "shufflenet_g3"  # ShuffleNet V1 g=3: paper's default (240/480/960 ch)
