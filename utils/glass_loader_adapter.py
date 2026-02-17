@@ -10,18 +10,15 @@ import torch
 import torch.nn.functional as F
 from torchvision import transforms
 
-# perlin.py lives inside the glass_source_code package
+# perlin.py is inside the glass_source_code package
 from glass_source_code.glass_src.perlin import perlin_mask
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 
-
+#Collects all .jpg paths under the images folder of dtd folder
+#raises error if nothing is found
 def _collect_dtd_paths(dtd_images_root: str) -> List[str]:
-    """
-    Collects all .jpg paths under dtd/images/*/*
-    e.g. data/dtd/images/banded/banded_0001.jpg
-    """
     paths = glob.glob(os.path.join(dtd_images_root, "*", "*.jpg"))
     if len(paths) == 0:
         raise FileNotFoundError(
@@ -30,11 +27,11 @@ def _collect_dtd_paths(dtd_images_root: str) -> List[str]:
         )
     return paths
 
+#Picks 3 random augmentations from a list of 9 (color jitter, flips, grayscale, autocontrast, equalize, affine)
+#Replicates original GLASS's rand_augmenter() method from datasets/mvtec.py
+#Returns a transforms.Compose pipeline that resizes, applies the 3 random augmentations, crops, converts to tensor, and normalizes
 
 def _rand_augmenter(resize: int) -> transforms.Compose:
-    """
-    Picks 3 random augmentations and composes them — same logic as original GLASS.
-    """
     list_aug = [
         transforms.ColorJitter(contrast=(0.8, 1.2)),
         transforms.ColorJitter(brightness=(0.8, 1.2)),
@@ -72,26 +69,26 @@ def _make_single_aug(img_tensor: torch.Tensor,
         mask_s     : [ph*pw, 1] – patch-level binary mask (long)
         mask_l_t   : [1, H, W]  – pixel-level binary mask (float)
     """
-    # --- 1. pick & augment a DTD texture ---
+    # --- pick & augment a DTD texture ---
     dtd_path  = np.random.choice(dtd_paths)
     dtd_pil   = PIL.Image.open(dtd_path).convert("RGB")
-    aug_tf    = _rand_augmenter(W)              # W == H == 256 in your setup
+    aug_tf    = _rand_augmenter(W)              # W == H == 256 in our setup which is input_size
     dtd_tensor = aug_tf(dtd_pil)               # [3, H, W], ImageNet-normalised
 
-    # --- 2. generate Perlin mask ---
+    # --- generating Perlin mask ---
     # perlin_mask expects (C, H, W) shape, feat_size = patch grid side
     # flag=1 returns (mask_s_np [ph,pw], mask_l_np [H,W])
-    feat_size = ph                              # ph == pw in your square setup
+    feat_size = ph                              # ph == pw in our square setup
     img_shape = (3, H, W)
     mask_fg   = torch.ones(H, W)               # no foreground mask → whole image
     mask_s_np, mask_l_np = perlin_mask(img_shape, feat_size, 0, 6, mask_fg, flag=1)
 
-    # convert to tensors
+    # converting to tensors
     mask_s_t = torch.from_numpy(mask_s_np).float()       # [ph, pw]
     mask_l_t = torch.from_numpy(mask_l_np).float()       # [H,  W]
 
-    # --- 3. blend texture into image ---
-    # un-normalise image to [0,1] for blending
+    # --- blending texture into image ---
+    # un-normalising image to [0,1] to blend
     mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1)
     std  = torch.tensor(IMAGENET_STD ).view(3, 1, 1)
 
@@ -107,7 +104,7 @@ def _make_single_aug(img_tensor: torch.Tensor,
 
     aug_tensor = ((aug_01 - mean) / std)       # re-normalise back
 
-    # --- 4. format masks ---
+    # --- format masks ---
     # mask_s : flatten [ph,pw] → [ph*pw, 1]  (long for GLASS)
     mask_s_out = mask_s_t.flatten().unsqueeze(1).long()   # [P, 1]
     # mask_l : add channel dim
@@ -137,6 +134,7 @@ class GlassLoaderAdapter:
     def __init__(
             self,
             loader:      Iterable[Dict[str, Any]],
+            # (ph, pw), taken from glass._embed(). example: (64, 64) - ph: patch grid height pw: patch grid width | total patch positions per image = ph * pw
             patch_grid:  Tuple[int, int],
             is_train:    bool,
             dtd_root:    str  = "",          # path to dtd/images  (required for training)
@@ -165,47 +163,60 @@ class GlassLoaderAdapter:
 
     @property
     def dataset(self):
-        # glass.py trainer() accesses training_data.dataset.distribution
+        # In glass.py trainer(), distribution is called by training_data.dataset.distribution
+        # Therefore dataset of the loader is needed to be reached as an attribute. @property defines a getter for a dataset that acts like attribute
         return getattr(self.loader, "dataset", None)
 
+
     def __len__(self) -> int:
-        return len(self.loader)
+        return len(self.loader) # returns the number of batches in the original loader that is passed to this glass_loader_adapter wrapper
 
+
+    # To be able to iterate through GlassLoaderAdapter just like the DataLoader (through batch dictionaries)
+    # for each batch in the loader, iter takes the batch and coverts the batches in the way that GLASS expects, then yields the converted batch
     def __iter__(self) -> Iterator[Dict[str, Any]]:
-        ph, pw = self.patch_grid
+        ph, pw = self.patch_grid  # as an example of (64,64) patch grid, each image becomes 1024 patches at the patch level
 
-        for batch in self.loader:
+        for batch in self.loader: # for each batch at the original data loader
 
-            # ----- image -----
+            # ----- image processing-----
+            # takes image entry from the batch, converts it to tensor if it is not already tensor
+            # converts the image tensor's datatype into float for the sake of the future arithmetic operations and mobilenetv3 expects float
             img = batch[self.image_key]
             if not torch.is_tensor(img):
                 img = torch.tensor(img)
             img = img.float()
-            B, C, H, W = img.shape
+            B, C, H, W = img.shape  # storing batch size and the image dimensions
 
             # ----- label → is_anomaly -----
-            if self.label_key in batch:
+            # takes the labels of the images , converts it to tensor if it is not already tensor
+            # Flattens the tensor into a 1D vector in case it is not, cause GLASS expects a 1D label vector
+            # ensures the values are integer with .long() since the labels are class indicators
+            if self.label_key in batch:   # checking if the batch has label attribute just in case
                 is_anomaly = batch[self.label_key]
                 if not torch.is_tensor(is_anomaly):
                     is_anomaly = torch.tensor(is_anomaly)
                 is_anomaly = is_anomaly.view(-1).long()
-            else:
+            else:  # if the batch does not have label attribute, assume it is a good(non-anomalous pic) and create a tensor of B times zeros
                 is_anomaly = torch.zeros(B, dtype=torch.long)
 
             # ----- mask_gt (pixel GT mask) -----
+            # Reads the mask entry from the batch, ensure it is a torch tensor with the shape of # [B,1,H,W]
+            # Ensures that the mask values are 0.0 or 1.0 depending on their real value which is either 0 or 255
             if self.mask_key in batch and batch[self.mask_key] is not None:
-                m = batch[self.mask_key]
+                m = batch[self.mask_key]  # [B,1,H,W]
                 if not torch.is_tensor(m):
                     m = torch.tensor(m)
-                if m.ndim == 3:
-                    m = m.unsqueeze(1)
+                if m.ndim == 3: # if the mask is in [B,H,W] format, convert it to [B,1,H,W]
+                    m = m.unsqueeze(1)  # unsqueeze to add the missing channel info just in case
                 mask_bin = (m > 0).float()          # [B,1,H,W]
-            else:
+            else:  # if no mask exists (good img) create mask tensor with all zeros, even though this is done in image_mask_transform.py, putting it for ensuring
                 mask_bin = torch.zeros(B, 1, H, W, dtype=torch.float32)
 
             mask_gt = mask_bin                      # [B,1,H,W]
 
             # ----- TRAIN: DTD + Perlin augmentation -----
+            # To create augmented anomalous version of the images during the training
             if self.is_train:
                 aug_list    = []
                 mask_s_list = []
@@ -224,22 +235,31 @@ class GlassLoaderAdapter:
                 aug    = torch.stack(aug_list,    dim=0)   # [B,3,H,W]
                 mask_s = torch.stack(mask_s_list, dim=0)  # [B,P,1]
 
-            # ----- EVAL: pass image as-is, downsample GT mask -----
+
             else:
+                # ---EVAL (val/test): use GT mask downsampled to patch grid ---
+                # artificial noise is not wanted on val/test images
+                # mask_bin is the pixel-level GT mask, turning it into patch-grid mask that GLASS would accept
                 aug        = img
-                mask_small = F.interpolate(mask_bin, size=(ph, pw), mode="nearest")
+                mask_small = F.interpolate(mask_bin, size=(ph, pw), mode="nearest") # [B,1,ph,pw]
                 mask_s     = (mask_small.flatten(2).transpose(1, 2) > 0).long()  # [B,P,1]
 
             # ----- image paths -----
+            # extracting file paths for each image in the batch
+            # reading the file path strings from the existing batch dictionary and putting them into a standardized field
+            # parenting every yielded batch has image bath that holds list of length b
             image_path: List[str] = []
             for k in self.path_keys:
-                if k in batch:
+                if k in batch:  # if the name is found
                     v = batch[k]
+                    # if v is already a list, convert each element into a string
+                    # if v is a single value, repeat it B times so the image_path will have still the length B
                     image_path = [str(x) for x in v] if isinstance(v, list) else [str(v)] * B
                     break
             if not image_path:
                 image_path = [""] * B
 
+            # yield returns one batch to the caller and the next time, it continues from the next batch
             yield {
                 "image":      img,
                 "aug":        aug,
