@@ -3,7 +3,7 @@ from pathlib import Path
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-DTD_PATH = Path("./data/dtd/images")
+DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
 CATEGORY = "bottle"
 VAL_RATIO = 0.0
 SEED = 42
