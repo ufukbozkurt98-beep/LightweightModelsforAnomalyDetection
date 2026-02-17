@@ -80,9 +80,9 @@ def run_glass(train_loader, val_loader, test_loader):
         target_embed_dimension=1024,
         patchsize=3,
         patchstride=1,
-        meta_epochs=2,
+        meta_epochs=300,
         # eval_epochs=10 ** 9,  # disables val AUROC/PRO
-        eval_epochs=1,  # GLASS runs predict() on every x epochs
+        eval_epochs=150,  # GLASS runs predict() on every x epochs
         step=20,
         train_backbone=False,  # we want the lightweight backbone to stay as frozen
         pre_proj=1
