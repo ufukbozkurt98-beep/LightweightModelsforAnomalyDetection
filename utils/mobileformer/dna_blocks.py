@@ -1,9 +1,3 @@
-"""
-DNA blocks for Mobile-Former (CVPR 2022)
-Ported from: https://github.com/AAboys/MobileFormer
-Paper: https://arxiv.org/abs/2108.05895
-"""
-
 from __future__ import annotations
 
 import torch
@@ -14,10 +8,13 @@ from timm.layers import DropPath
 
 
 def _make_divisible(v, divisor, min_value=None):
-    """Make value divisible by divisor (from TF slim)."""
+    """Make value divisible by divisor"""
+    # Make sure channel count is a multiple of divisor
     if min_value is None:
         min_value = divisor
+    # Round v to the nearest divisible number
     new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
+    # Avoid rounding down too much
     if new_v < 0.9 * v:
         new_v += divisor
     return new_v
@@ -45,6 +42,9 @@ class h_swish(nn.Module):
 
 
 class ChannelShuffle(nn.Module):
+    """
+    Mix channels between groups
+    """
     def __init__(self, groups):
         super().__init__()
         self.groups = groups
@@ -60,7 +60,6 @@ class ChannelShuffle(nn.Module):
 class DyReLU(nn.Module):
     """
     Dynamic ReLU
-    num_func: -1=none, 0=relu, 1=SE, 2=dy-relu
     """
 
     def __init__(self, num_func=2, use_bias=False, scale=2.0, serelu=False):
@@ -68,6 +67,8 @@ class DyReLU(nn.Module):
         assert -1 <= num_func <= 2
         self.num_func = num_func
         self.scale = scale
+        # If num_func==0: use ReLU6
+        # If serelu and num_func==1: also use ReLU6 before gating
         serelu = serelu and num_func == 1
         self.act = nn.ReLU6(inplace=True) if num_func == 0 or serelu else nn.Sequential()
 
@@ -92,9 +93,10 @@ class DyReLU(nn.Module):
         return out
 
 
-# Token -> activation parameter generator
-
 class HyperFunc(nn.Module):
+    """
+    Generate activation parameters from tokens.
+    """
     def __init__(self, token_dim, oup, sel_token_id=0, reduction_ratio=4):
         super().__init__()
         self.sel_token_id = sel_token_id
@@ -107,16 +109,19 @@ class HyperFunc(nn.Module):
         )
 
     def forward(self, x):
+        # can be tokens, attn or just tokens
         if isinstance(x, tuple):
             x, attn = x
 
         if self.sel_token_id == -1:
+            # Use attention to mix all tokens into a spatial map
             hp = self.hyper(x).permute(1, 2, 0)
             bs, T, H, W = attn.shape
             attn = attn.view(bs, T, H * W)
             hp = torch.matmul(hp, attn)
             h = hp.view(bs, -1, H, W)
         else:
+            # Use one selected token
             t = x[self.sel_token_id]
             h = self.hyper(t)
             h = torch.unsqueeze(torch.unsqueeze(h, 2), 3)
@@ -124,6 +129,7 @@ class HyperFunc(nn.Module):
 
 
 class MaxDepthConv(nn.Module):
+    # Depthwise conv using 3x1 and 1x3
     def __init__(self, inp, oup, stride):
         super().__init__()
         self.conv1 = nn.Sequential(
@@ -136,13 +142,12 @@ class MaxDepthConv(nn.Module):
         )
 
     def forward(self, x):
+        # Take the stronger response
         return torch.max(self.conv1(x), self.conv2(x))
 
 
-# Local <-> Global bridges
-
 class Local2Global(nn.Module):
-    """CNN features -> token representations"""
+    """CNN features to token representations"""
 
     def __init__(
         self,
@@ -190,16 +195,19 @@ class Local2Global(nn.Module):
         T, _, _ = tokens.shape
         attn = None
 
+        # Create token updates using a simple MLP over spatial positions
         if "mlp" in self.block:
             t_sum = self.mlp(features.view(bs, C, -1)).permute(2, 0, 1)
-
+        # Build attention Q from tokens
         if "attn" in self.block:
             t = self.q(tokens).view(T, bs, self.num_heads, -1).permute(1, 2, 0, 3)
+            # Use raw CNN features
             if self.remove_proj_local:
                 k = features.view(bs, self.num_heads, -1, H * W)
                 attn = (t @ k) * self.scale
                 attn_out = attn.softmax(dim=-1)
                 attn_out = attn_out @ k.transpose(-1, -2)
+            # Use learned K/V projections
             else:
                 k = self.k(features).view(bs, self.num_heads, -1, H * W)
                 v = self.v(features).view(bs, self.num_heads, -1, H * W)
@@ -207,17 +215,21 @@ class Local2Global(nn.Module):
                 attn_out = attn.softmax(dim=-1)
                 attn_out = attn_out @ v.transpose(-1, -2)
 
+            # Convert attention output back
             t_a = attn_out.permute(2, 0, 1, 3).reshape(T, bs, -1)
+            # if we also used MLP, add them
             t_sum = t_sum + t_a if "mlp" in self.block else t_a
 
+        # Scale token update with a gate from tokens
         if self.use_dynamic:
             alp = self.alpha(tokens) * self.alpha_scale
             t_sum = t_sum * alp
-
+        # Project to token_dim and update tokens with residual
         t_sum = self.proj(t_sum)
         tokens = tokens + self.drop_path(t_sum)
         tokens = self.layer_norm(tokens)
 
+        # Reshape attention map
         if attn is not None:
             bs, Nh, Ca, HW = attn.shape
             attn = attn.view(bs, Nh, Ca, H, W)
@@ -248,7 +260,7 @@ class GlobalBlock(nn.Module):
         self.use_dynamic = use_dynamic
         self.use_ffn = use_ffn
         self.ffn_exp = 2
-
+        # Extra FFN like Transformer FFN
         if self.use_ffn:
             self.ffn = nn.Sequential(
                 nn.Linear(token_dim, token_dim * self.ffn_exp),
@@ -256,22 +268,24 @@ class GlobalBlock(nn.Module):
                 nn.Linear(token_dim * self.ffn_exp, token_dim),
             )
             self.ffn_norm = nn.LayerNorm(token_dim)
-
+        # Gate to scale token update
         if self.use_dynamic:
             self.alpha_scale = 2.0
             self.alpha = nn.Sequential(nn.Linear(token_dim, token_dim), h_sigmoid())
 
+        # MLP over token positions (T dimension).
         if "mlp" in self.block:
             self.token_mlp = nn.Sequential(
                 nn.Linear(token_num, token_num * mlp_token_exp),
                 nn.GELU(),
                 nn.Linear(token_num * mlp_token_exp, token_num),
             )
-
+        # Self-attention inside tokens.
         if "attn" in self.block:
             self.scale = (token_dim // attn_num_heads) ** -0.5
             self.q = nn.Linear(token_dim, token_dim)
 
+        # Mix channels
         self.channel_mlp = nn.Linear(token_dim, token_dim)
         self.layer_norm = nn.LayerNorm(token_dim)
         self.drop_path = DropPath(drop_path_rate)
@@ -280,28 +294,37 @@ class GlobalBlock(nn.Module):
         tokens = x
         T, bs, C = tokens.shape
 
+        # Mix tokens using token_mlp on the T dimension
         if "mlp" in self.block:
             t = self.token_mlp(tokens.permute(1, 2, 0))
             t_sum = t.permute(2, 0, 1)
 
         if "attn" in self.block:
+            # Build Q from tokens.
             t = self.q(tokens).view(T, bs, self.num_heads, -1).permute(1, 2, 0, 3)
+            # Build K from tokens
             k = tokens.permute(1, 2, 0).view(bs, self.num_heads, -1, T)
+            # Attention weights
             attn = (t @ k) * self.scale
             attn_out = attn.softmax(dim=-1)
+            # Weighted sum
             attn_out = attn_out @ k.transpose(-1, -2)
             t_a = attn_out.permute(2, 0, 1, 3).reshape(T, bs, -1)
+            # If we also used MLP, add them
             t_sum = t_sum + t_a if "mlp" in self.block else t_a
 
         if self.use_dynamic:
+            # Scale update with a gate from tokens
             alp = self.alpha(tokens) * self.alpha_scale
             t_sum = t_sum * alp
 
+        # Final linear + residual update
         t_sum = self.channel_mlp(t_sum)
         tokens = tokens + self.drop_path(t_sum)
         tokens = self.layer_norm(tokens)
 
         if self.use_ffn:
+            # Extra FFN residual
             t_ffn = self.ffn(tokens)
             tokens = tokens + t_ffn
             tokens = self.ffn_norm(tokens)
@@ -330,17 +353,19 @@ class Global2Local(nn.Module):
         self.block = block_type
         self.use_dynamic = use_dynamic
 
+        # Gate to scale token contribution
         if self.use_dynamic:
             self.alpha_scale = 2.0
             self.alpha = nn.Sequential(nn.Linear(token_dim, inp), h_sigmoid())
 
+        # Map tokens to spatial positions
         if "mlp" in self.block:
             self.mlp = nn.Linear(token_num, inp_res)
-
+        # Attention scale and token key projection
         if "attn" in self.block:
             self.scale = (inp // attn_num_heads) ** -0.5
             self.k = nn.Linear(token_dim, inp)
-
+        # Project tokens to CNN channel space
         self.proj = nn.Linear(token_dim, inp)
         self.drop_path = DropPath(drop_path_rate)
 
@@ -352,6 +377,7 @@ class Global2Local(nn.Module):
     def forward(self, x):
         out, tokens = x
 
+        # Project tokens into CNN channel space
         if self.use_dynamic:
             alp = self.alpha(tokens) * self.alpha_scale
             v = self.proj(tokens)
@@ -360,36 +386,43 @@ class Global2Local(nn.Module):
             v = self.proj(tokens).permute(1, 2, 0)
 
         bs, C, H, W = out.shape
+        # Convert token info to a spatial map
         if "mlp" in self.block:
             g_sum = self.mlp(v).view(bs, C, H, W)
-
+        # Build Q from CNN
         if "attn" in self.block:
             if self.remove_proj_local:
                 q = out.view(bs, self.num_heads, -1, H * W).transpose(-1, -2)
             else:
                 q = self.q(out).view(bs, self.num_heads, -1, H * W).transpose(-1, -2)
 
+            # Build k from tokens
             k = self.k(tokens).permute(1, 2, 0).view(bs, self.num_heads, -1, self.token_num)
+            # Pixel-to-token attention
             attn = (q @ k) * self.scale
             attn_out = attn.softmax(dim=-1)
+            # Use v from tokens
             vh = v.view(bs, self.num_heads, -1, self.token_num)
             attn_out = attn_out @ vh.transpose(-1, -2)
 
+            # Convert back
             g_a = attn_out.transpose(-1, -2).reshape(bs, C, H, W)
 
             if not self.remove_proj_local:
                 g_a = self.fuse(g_a)
 
+            # If we also used MLP, add them
             g_sum = g_sum + g_a if "mlp" in self.block else g_a
 
+        # Residual update into CNN output
         out = out + self.drop_path(g_sum)
         return out
 
 
-# DNA Blocks
-
 class DnaBlock3(nn.Module):
-    """DNA block variant: dw -> pw -> dw -> pw with L2G/G2G/G2L bridges"""
+    """This is a main hybrid block
+    (CNN + tokens)
+    """
 
     def __init__(
         self,
@@ -418,7 +451,7 @@ class DnaBlock3(nn.Module):
         remove_proj_local=True,
     ):
         super().__init__()
-
+        # Read expansion ratios and kernel sizes
         if isinstance(exp_ratios, tuple):
             e1, e2 = exp_ratios
         else:
@@ -453,6 +486,7 @@ class DnaBlock3(nn.Module):
                     nn.Conv2d(inp * e1, oup, 1, 1, 0, groups=group_num, bias=False),
                     nn.BatchNorm2d(oup),
                 )
+        # Hybrid path: build conv layers + token bridges
         else:
             self.se_flag = se_flag
             hidden_dim1 = round(inp * e1)
@@ -535,7 +569,10 @@ class DnaBlock3(nn.Module):
 
             self.drop_path = DropPath(cnn_drop_path_rate)
 
-            # L2G, G2G, G2L bridges
+            # Bridges:
+            # Local2Global: CNN -> tokens
+            # GlobalBlock: tokens -> tokens
+            # Global2Local: tokens -> CNN
             self.local_global = Local2Global(
                 inp, block_type=gbr_type, token_dim=token_dim, token_num=token_num,
                 inp_res=inp_res, use_dynamic=gbr_dynamic[0], norm_pos=norm_pos,
@@ -557,6 +594,7 @@ class DnaBlock3(nn.Module):
 
     def forward(self, x):
         features, tokens = x
+        # only CNN convs, no token bridges
         if self.use_conv_alone:
             out = self.conv(features)
         else:
@@ -564,9 +602,10 @@ class DnaBlock3(nn.Module):
             tokens, attn = self.local_global((features, tokens))
             tokens = self.global_block(tokens)
 
-            # Conv path: dw -> pw -> dw -> pw
+            # Start CNN conv path: conv1 (depthwise)
             out = self.conv1(features)
 
+            # if hyper_token_id==-1, build a spatial attention map for pixel-wise hyper params
             if self.hyper_token_id == -1:
                 attn = attn.mean(dim=1)
                 if self.stride > 1:
@@ -574,16 +613,20 @@ class DnaBlock3(nn.Module):
                     attn = F.adaptive_avg_pool2d(attn, (H, W))
                 attn = torch.softmax(attn, dim=1)
 
+            # Apply token-driven activation after conv1
             if self.se_flag[0] > 0:
                 hp = self.hyper1((tokens, attn))
                 out = self.act1((out, hp))
             else:
                 out = self.act1(out)
 
+            # conv2 (pointwise) and its activation
             out = self.conv2(out)
             out = self.act2(out)
 
             out_cp = out
+
+            # conv3 (depthwise) + token-driven activation
             out = self.conv3(out)
             if self.se_flag[2] > 0:
                 hp = self.hyper3((tokens, attn))
@@ -591,6 +634,7 @@ class DnaBlock3(nn.Module):
             else:
                 out = self.act3(out)
 
+            # conv3 (depthwise) + token-driven activation
             out = self.conv4(out)
             if self.se_flag[3] > 0:
                 hp = self.hyper4((tokens, attn))
@@ -611,7 +655,7 @@ class DnaBlock3(nn.Module):
 
 
 class DnaBlock(nn.Module):
-    """DNA block: pw -> dw -> pw with L2G/G2G/G2L bridges"""
+    """DNA block"""
 
     def __init__(
         self,
@@ -744,7 +788,7 @@ class DnaBlock(nn.Module):
             tokens, attn = self.local_global((features, tokens))
             tokens = self.global_block(tokens)
 
-            # Conv path: pw -> dw -> pw
+            # Conv path
             out = self.conv1(features)
 
             if self.hyper_token_id == -1:
@@ -787,10 +831,11 @@ class DnaBlock(nn.Module):
         return (out, tokens)
 
 
-# Classifier head (not used in feature extraction mode)
 
 class MergeClassifier(nn.Module):
-    """Classification head that merges CNN features and tokens"""
+    """Classification head that merges CNN features and tokens
+    not used in feature extraction mode
+    """
 
     def __init__(
         self,

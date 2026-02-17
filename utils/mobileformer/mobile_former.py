@@ -1,9 +1,3 @@
-"""
-Mobile-Former (CVPR 2022) - CNN + Transformer hybrid
-Ported from: https://github.com/AAboys/MobileFormer
-Paper: https://arxiv.org/abs/2108.05895
-"""
-
 from __future__ import annotations
 
 import math
@@ -20,7 +14,7 @@ from .dna_blocks import (
     _make_divisible,
 )
 
-# Shared config across all variants
+# shared config for all variants
 _COMMON_KWARGS = dict(
     cnn_drop_path_rate=0.1,
     dw_conv="dw",
@@ -39,7 +33,6 @@ _COMMON_KWARGS = dict(
 )
 
 # Variant configs
-# block_args rows: [block_class, expansion1, channels, repeat, stride, expansion2]
 _VARIANT_CONFIGS = {
     "mobileformer_508m": dict(
         stem_chs=24,
@@ -100,7 +93,7 @@ _VARIANT_CONFIGS = {
     ),
 }
 
-# Block class lookup (instead of eval())
+# Block class lookup
 _BLOCK_CLS = {
     "DnaBlock": DnaBlock,
     "DnaBlock3": DnaBlock3,
@@ -147,6 +140,7 @@ class MobileFormer(nn.Module):
         remove_proj_local: bool = True,
     ):
         super().__init__()
+        # Sets defaults for optional list parameters
         if se_flag is None:
             se_flag = [2, 0, 2, 0]
         if gbr_dynamic is None:
@@ -154,6 +148,7 @@ class MobileFormer(nn.Module):
         if gbr_drop is None:
             gbr_drop = [0.0, 0.0]
 
+        # Prepares drop-path and divisibility divisor for channel rounding
         cnn_drop_path_rate = drop_path_rate
         mdiv = 8 if width_mult > 1.01 else 4
         self.num_classes = num_classes
@@ -161,7 +156,7 @@ class MobileFormer(nn.Module):
         # Learnable global tokens
         self.tokens = nn.Embedding(token_num, token_dim)
 
-        # Stem conv: 3x3 stride-2 downsample
+        # first CNN, it makes the image smaller (stride=2) and creates basic features
         self.stem = nn.Sequential(
             nn.Conv2d(in_chans, stem_chs, 3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(stem_chs),
@@ -169,7 +164,7 @@ class MobileFormer(nn.Module):
         )
         input_channel = stem_chs
 
-        # Build DNA blocks as ModuleList (need manual iteration for feature tapping)
+        # Build DNA blocks as ModuleList
         layer_num = len(block_args)
         inp_res = img_size * img_size // 4
         layers: List[nn.Module] = []
@@ -179,6 +174,7 @@ class MobileFormer(nn.Module):
         self._stage_out_channels_list: List[int] = []
         flat_idx = 0
 
+        # Read each block config
         for idx, val in enumerate(block_args):
             b, t, c, n, s, t2 = val
             block_cls = _BLOCK_CLS[b]
@@ -193,6 +189,7 @@ class MobileFormer(nn.Module):
             drop_path_prob = drop_path_rate * (idx + 1) / layer_num
             cnn_drop_path_prob = cnn_drop_path_rate * (idx + 1) / layer_num
 
+            # Create one DNA block
             layers.append(
                 block_cls(
                     input_channel,
@@ -221,16 +218,18 @@ class MobileFormer(nn.Module):
                 )
             )
 
+            # if this block downsamples, remember its index and channels (for l1/l2/l3).
             if s == 2:
                 self._stride2_flat_indices.append(flat_idx)
                 self._stage_out_channels_list.append(output_channel)
 
+            # Update channel count and spatial area after this block
             input_channel = output_channel
             if s == 2:
                 inp_res = inp_res // 4
             flat_idx += 1
 
-            # Repeat blocks (stride=1)
+            # Repeat blocks, stride=1
             for _ in range(1, n):
                 layers.append(
                     block_cls(
@@ -276,7 +275,8 @@ class MobileFormer(nn.Module):
             attn_num_heads=attn_num_heads,
         )
 
-        # Classifier head (skip if num_classes=0, we only need features)
+        # Classifier head
+        # skip if num_classes=0, we only need features for this task
         if num_classes > 0:
             self.classifier = MergeClassifier(
                 input_channel,
@@ -302,6 +302,7 @@ class MobileFormer(nn.Module):
         # Initialize weights
         self._initialize_weights()
 
+    # Initialize weights for Conv/BN/Linear layers
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -321,16 +322,21 @@ class MobileFormer(nn.Module):
         """
         Extract multi-scale features
         """
+
+        # Prepare tokens for this batch
         bs = x.shape[0]
         z = self.tokens.weight
         tokens = z[None].repeat(bs, 1, 1).clone().permute(1, 0, 2)
 
+        # take stem to get first CNN feature map
         x = self.stem(x)
 
-        tap_set = set(self._tap_indices)
-        collected: Dict[str, torch.Tensor] = {}
+        tap_set = set(self._tap_indices) # where to save l1/l2/l3.
+        collected: Dict[str, torch.Tensor] = {} # store the feature maps
         tap_counter = 0
 
+        # Run blocks and save CNN feature maps at downsample points
+        # Stop early after 3 scales to save time
         for i, block in enumerate(self.features):
             x, tokens = block((x, tokens))
             if i in tap_set:
@@ -339,7 +345,7 @@ class MobileFormer(nn.Module):
                 if tap_counter == 3:
                     break  # done, skip remaining blocks
 
-        # Fill remaining if fewer than 3 stride-2 blocks
+        # If we have fewer than 3 scales, reuse the last feature map.
         while tap_counter < 3:
             tap_counter += 1
             collected[f"l{tap_counter}"] = x
@@ -348,13 +354,14 @@ class MobileFormer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Full forward pass with classifier head."""
+        # if no classifier head, return multi-scale features.
         if self.classifier is None:
             return self.forward_features(x)
 
         bs = x.shape[0]
+        # # Full forward: run all blocks, update tokens, then classify
         z = self.tokens.weight
         tokens = z[None].repeat(bs, 1, 1).clone().permute(1, 0, 2)
-
         x = self.stem(x)
         for block in self.features:
             x, tokens = block((x, tokens))
