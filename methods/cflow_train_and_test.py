@@ -17,7 +17,7 @@ def train_and_test_cflow(
     *,
     backbone_name: str = "mobilevit_s",
     device: str | None = None,
-    coupling_blocks: int = 8,
+    coupling_blocks: int = 4,
     condition_vec: int = 128,
     clamp_alpha: float = 1.9,
     N: int = 256,
