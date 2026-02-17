@@ -1,5 +1,6 @@
 # configs/config.py
 from pathlib import Path
+import os
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
