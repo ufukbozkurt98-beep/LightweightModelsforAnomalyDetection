@@ -46,7 +46,7 @@ class CFlowMethod:
             enc_arch="timm",
             dec_arch="freia-cflow",
             pool_layers=3,
-            coupling_blocks=8,
+            coupling_blocks=4,
             condition_vec=128,
             clamp_alpha=1.9,
             lr=2e-4,
