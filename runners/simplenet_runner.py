@@ -15,11 +15,11 @@ import torchvision.models as tvm
 
 from utils.feature_extractor import build_extractor
 
+
 from configs.config import BACKBONE_KEY
 
 from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
-
 
 def run_simplenet(train_loader, val_loader, test_loader):
     # for simplenet
@@ -59,7 +59,7 @@ def run_simplenet(train_loader, val_loader, test_loader):
     print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
     print("TEST defect types sample:", b["defect_type"][:4])
 
-    # -------- mobilev3net stuff ------
+    # -------- lightweight stuff ------
     # get a batch to do mask check
     b = next(iter(test_loader))
     mask_sums = b["mask"].sum(dim=(1, 2, 3))
@@ -104,14 +104,12 @@ def run_simplenet(train_loader, val_loader, test_loader):
     sn = SimpleNet(device)
     sn.load(
         backbone=extractor,
-        # layers_to_extract_from=["l1", "l2", "l3"],
-        layers_to_extract_from=["l2", "l3"],
+        layers_to_extract_from=["l1", "l2", "l3"],
+        #layers_to_extract_from=["l2", "l3"],
         device=device,
         input_shape=[3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE],
-        #pretrain_embed_dimension=1536,
-        #target_embed_dimension=1536,
-        pretrain_embed_dimension=512,
-        target_embed_dimension=512,
+        pretrain_embed_dimension=128,
+        target_embed_dimension=128,
         patchsize=3,
         patchstride=1,
         meta_epochs=40,
@@ -120,7 +118,10 @@ def run_simplenet(train_loader, val_loader, test_loader):
         dsc_layers=2,
         dsc_hidden=1024,
         train_backbone=False,
-        noise_std=0.015,  # to match the paper's parameters
+        noise_std=0.5,
+        dsc_lr=0.0001,       
+        lr=0.0001,           
+        dsc_margin=0.5,      
     )
 
     sn.set_model_dir(str(REPORTS_DIR / "simplenet_runs"), CATEGORY)

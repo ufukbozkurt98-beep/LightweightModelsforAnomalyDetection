@@ -24,9 +24,6 @@ def run_glass(train_loader, val_loader, test_loader):
     b = next(iter(train_loader))
     print("TRAIN shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
 
-    b = next(iter(val_loader))
-    print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-
     b = next(iter(test_loader))
     print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
     print("TEST defect types sample:", b["defect_type"][:4])  # printing the defect types
@@ -83,7 +80,7 @@ def run_glass(train_loader, val_loader, test_loader):
         patchstride=1,
         meta_epochs=200,
         # eval_epochs=10 ** 9,  # disables val AUROC/PRO
-        eval_epochs=20,  # GLASS runs predict() on every x epochs
+        eval_epochs=100,  # GLASS runs predict() on every x epochs
         step=10,
         train_backbone=False,  # we want the lightweight backbone to stay as frozen
         pre_proj=0
@@ -104,14 +101,14 @@ def run_glass(train_loader, val_loader, test_loader):
     # no Excel file needed in this way since we use our own loading pipeline
     # svd = 0 in this mode which is more reliable for now since we change backbone to lightweight
     train_loader.dataset.distribution = 2
-    val_loader.dataset.distribution = 2
+    #val_loader.dataset.distribution = 2
     test_loader.dataset.distribution = 2
 
     patch_grid = tuple(patch_shapes[0])  # ensuring mask_s shape matches how _embed() patches. This goes into the GlassLoaderAdapter as (ph, pw)
 
     # loaders cannot directly be passed through the GLASS. We need a wrapper.
     train_g = GlassLoaderAdapter(train_loader, patch_grid=patch_grid, is_train=True)
-    val_g = GlassLoaderAdapter(val_loader, patch_grid=patch_grid, is_train=False)
+    #val_g = GlassLoaderAdapter(val_loader, patch_grid=patch_grid, is_train=False)
     test_g = GlassLoaderAdapter(test_loader, patch_grid=patch_grid, is_train=False)
 
     print("Training...")
