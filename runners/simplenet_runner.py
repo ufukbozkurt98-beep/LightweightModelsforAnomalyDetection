@@ -112,7 +112,7 @@ def run_simplenet(train_loader, val_loader, test_loader):
         target_embed_dimension=128,
         patchsize=3,
         patchstride=1,
-        meta_epochs=40,
+        meta_epochs=1,
         gan_epochs=4,
         aed_meta_epochs=1,
         dsc_layers=2,

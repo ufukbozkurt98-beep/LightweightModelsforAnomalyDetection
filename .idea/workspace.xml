@@ -7,10 +7,10 @@
     <list default="true" id="53e2a920-f20c-4546-92a1-7fb353a9c20c" name="Changes" comment="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/reports/mvtec_all_reports.json" beforeDir="false" afterPath="$PROJECT_DIR$/data/reports/mvtec_all_reports.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/reports/mvtec_bottle_split.json" beforeDir="false" afterPath="$PROJECT_DIR$/data/reports/mvtec_bottle_split.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/glass_source_code/glass_src/perlin.py" beforeDir="false" afterPath="$PROJECT_DIR$/glass_source_code/glass_src/perlin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/runners/glass_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/glass_runner.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/runners/simplenet_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/simplenet_runner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/simplenet_code/simplenet_author/common_sn.py" beforeDir="false" afterPath="$PROJECT_DIR$/simplenet_code/simplenet_author/common_sn.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/glass_loader_adapter.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/glass_loader_adapter.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -182,7 +182,15 @@
       <option name="project" value="LOCAL" />
       <updated>1770678837757</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="project initialization from colab (Data extraction Data Check , pre-processing and data loader)">
+      <option name="closed" value="true" />
+      <created>1771330761782</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1771330761782</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">

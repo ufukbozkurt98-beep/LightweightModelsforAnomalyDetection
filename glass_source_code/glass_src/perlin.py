@@ -1,4 +1,5 @@
-import imgaug.augmenters as iaa
+#import imgaug.augmenters as iaa
+from scipy.ndimage import rotate as scipy_rotate
 import numpy as np
 import torch
 import math
@@ -11,7 +12,9 @@ def generate_thr(img_shape, min=0, max=4):
     perlin_scaley = 2 ** np.random.randint(min_perlin_scale, max_perlin_scale)
     perlin_noise_np = rand_perlin_2d_np((img_shape[1], img_shape[2]), (perlin_scalex, perlin_scaley))
     threshold = 0.5
-    perlin_noise_np = iaa.Sequential([iaa.Affine(rotate=(-90, 90))])(image=perlin_noise_np)
+    #perlin_noise_np = iaa.Sequential([iaa.Affine(rotate=(-90, 90))])(image=perlin_noise_np)
+    angle = np.random.uniform(-90, 90)
+    perlin_noise_np = scipy_rotate(perlin_noise_np, angle, reshape=False)
     perlin_thr = np.where(perlin_noise_np > threshold, np.ones_like(perlin_noise_np), np.zeros_like(perlin_noise_np))
     return perlin_thr
 

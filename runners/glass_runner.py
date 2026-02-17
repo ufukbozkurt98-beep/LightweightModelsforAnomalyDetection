@@ -19,6 +19,8 @@ from utils.feature_extractor import build_extractor
 
 from configs.config import BACKBONE_KEY
 
+from configs.config import DTD_PATH
+
 def run_glass(train_loader, val_loader, test_loader):
     # getting the first batch from the loaders and printing the sizes and the labels
     b = next(iter(train_loader))
@@ -78,12 +80,12 @@ def run_glass(train_loader, val_loader, test_loader):
         target_embed_dimension=1024,
         patchsize=3,
         patchstride=1,
-        meta_epochs=200,
+        meta_epochs=2,
         # eval_epochs=10 ** 9,  # disables val AUROC/PRO
-        eval_epochs=100,  # GLASS runs predict() on every x epochs
-        step=10,
+        eval_epochs=1,  # GLASS runs predict() on every x epochs
+        step=20,
         train_backbone=False,  # we want the lightweight backbone to stay as frozen
-        pre_proj=0
+        pre_proj=1
     )
 
     print("GLASS load OK")
@@ -107,7 +109,7 @@ def run_glass(train_loader, val_loader, test_loader):
     patch_grid = tuple(patch_shapes[0])  # ensuring mask_s shape matches how _embed() patches. This goes into the GlassLoaderAdapter as (ph, pw)
 
     # loaders cannot directly be passed through the GLASS. We need a wrapper.
-    train_g = GlassLoaderAdapter(train_loader, patch_grid=patch_grid, is_train=True)
+    train_g = GlassLoaderAdapter(train_loader, patch_grid=patch_grid, is_train=True, dtd_root=str(DTD_PATH))
     #val_g = GlassLoaderAdapter(val_loader, patch_grid=patch_grid, is_train=False)
     test_g = GlassLoaderAdapter(test_loader, patch_grid=patch_grid, is_train=False)
 
