@@ -20,8 +20,15 @@ from configs.config import BACKBONE_KEY
 
 from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
+import shutil
 
 def run_simplenet(train_loader, val_loader, test_loader):
+
+
+    checkpoint_dir = REPORTS_DIR / "simplenet_runs" / CATEGORY
+    if checkpoint_dir.exists():
+        shutil.rmtree(checkpoint_dir)
+    
     # for simplenet
     train_ds = SimpleNetDatasetAdapter(train_loader.dataset)
     val_ds = SimpleNetDatasetAdapter(val_loader.dataset)
