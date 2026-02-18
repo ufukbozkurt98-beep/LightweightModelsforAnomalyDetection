@@ -8,14 +8,14 @@ DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
 CATEGORY = "bottle"
 VAL_RATIO = 0.0
 SEED = 42
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 IMAGE_INPUT_SIZE = 256
 SPLIT_JSON = REPORTS_DIR / f"mvtec_{CATEGORY}_split.json" # path object pointing to split file of the category
 NUM_WORKERS = 2
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
-#BACKBONE_KEY = "mobilenetv3_small"
+#BACKBONE_KEY = "mobilenetv3_large"
 #BACKBONE_KEY = "efficientnet_lite0"
-BACKBONE_KEY = "mobilenetv3_large"
+BACKBONE_KEY = "mobilevit_xs"
 #METHOD = "glass"
 METHOD = "simplenet"
 
