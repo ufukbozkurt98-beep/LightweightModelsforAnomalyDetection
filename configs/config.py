@@ -15,7 +15,7 @@ NUM_WORKERS = 2
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
 #BACKBONE_KEY = "mobilenetv3_large"
 #BACKBONE_KEY = "efficientnet_lite0"
-BACKBONE_KEY = "mobilevit_xs"
+BACKBONE_KEY = "mobilevit_s"
 #METHOD = "glass"
 METHOD = "simplenet"
 
