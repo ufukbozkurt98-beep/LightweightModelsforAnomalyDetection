@@ -11,21 +11,27 @@ class TimmActivationEncoder(torch.nn.Module):
     """
     In the original CFLOW, the encoder fills activation['layer0', 'layer1', 'layer2'] using forward hooks.
     In this project, the extractor returns features 'l1', 'l2', 'l3', and we map them to activation.
+
+    When normalize=True, applies L2 normalization along the channel dimension to stabilize
+    feature magnitudes for transformer-based backbones (e.g. MobileViT).
     """
 
-    def __init__(self, extractor, pool_layers):
+    def __init__(self, extractor, pool_layers, normalize=False):
         super().__init__()
         self.extractor = extractor
         self.pool_layers = pool_layers  # ['layer0','layer1','layer2']
+        self.normalize = normalize
 
     @torch.no_grad()
     def forward(self, x):
         feats = self.extractor(x)  # dict: l1,l2,l3
         # Save features to the global activation dict (It is initialized in cflow_freia.py globally) using CFLOW layer
         # names.
-        activation[self.pool_layers[0]] = feats["l1"].detach()
-        activation[self.pool_layers[1]] = feats["l2"].detach()
-        activation[self.pool_layers[2]] = feats["l3"].detach()
+        for i, key in enumerate(["l1", "l2", "l3"]):
+            feat = feats[key].detach()
+            if self.normalize:
+                feat = F.normalize(feat, p=2, dim=1)  # L2 norm along channel dim
+            activation[self.pool_layers[i]] = feat
         return feats
 
 
@@ -46,7 +52,7 @@ class CFlowMethod:
             enc_arch="timm",
             dec_arch="freia-cflow",
             pool_layers=3,
-            coupling_blocks=4,
+            coupling_blocks=8,
             condition_vec=128,
             clamp_alpha=1.9,
             lr=2e-4,
@@ -54,6 +60,7 @@ class CFlowMethod:
             sub_epochs=8,
             N=256,
             input_size=256,
+            normalize_features=False,
             verbose=True,
             hide_tqdm_bar=False,
     ):
@@ -111,7 +118,7 @@ class CFlowMethod:
         # Set pool layer names
         self.pool_layers = ["layer" + str(i) for i in range(pool_layers)]
         # Call encoder wrapper for timm backbones (MobileNetV3 / EfficientNet-Lite / MobileViT).
-        self.encoder = TimmActivationEncoder(self.extractor, self.pool_layers).to(device).eval()
+        self.encoder = TimmActivationEncoder(self.extractor, self.pool_layers, normalize=normalize_features).to(device).eval()
 
         # At the beginning decoder and optimizer are None
         self.decoders = None

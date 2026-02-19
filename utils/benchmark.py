@@ -1,10 +1,3 @@
-"""
-Benchmark utilities for measuring model complexity and inference speed.
-
-Provides: parameter count, FLOPs, model size on disk, and inference latency.
-Works with any nn.Module — used by FastFlow and CFlow runners.
-"""
-
 import time
 import tempfile
 import os
@@ -16,11 +9,7 @@ from fvcore.nn import FlopCountAnalysis
 
 def count_parameters(model: nn.Module) -> dict:
     """
-    Count total and trainable parameters.
-
-    Returns dict with:
-        total_params: int
-        trainable_params: int
+    Count total and trainable parameters
     """
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -29,14 +18,7 @@ def count_parameters(model: nn.Module) -> dict:
 
 def measure_flops(model: nn.Module, input_tensor: torch.Tensor) -> int:
     """
-    Count FLOPs for a single forward pass using fvcore.
-
-    Args:
-        model: the nn.Module to profile
-        input_tensor: example input (single batch)
-
-    Returns:
-        Total FLOPs as int.
+    Count FLOPs for a single forward pass using fvcore
     """
     model.eval()
     flops = FlopCountAnalysis(model, input_tensor)
@@ -47,7 +29,7 @@ def measure_flops(model: nn.Module, input_tensor: torch.Tensor) -> int:
 
 def measure_model_size_mb(model: nn.Module) -> float:
     """
-    Measure serialized model size in MB by saving to a temp file.
+    Measure serialized model size in MB by saving to a temp file
     """
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as f:
         torch.save(model.state_dict(), f)
@@ -65,21 +47,7 @@ def measure_latency(
     n_runs: int = 50,
 ) -> dict:
     """
-    Measure inference latency in milliseconds.
-
-    Uses torch.cuda.Event for GPU timing, time.perf_counter for CPU.
-
-    Args:
-        model: nn.Module to benchmark
-        input_tensor: example input batch (will be moved to device)
-        device: "cpu" or "cuda"
-        n_warmup: warmup iterations (not measured)
-        n_runs: timed iterations
-
-    Returns dict with:
-        mean_ms: float  — average latency per forward pass
-        std_ms: float   — standard deviation
-        device: str     — device used
+    Measure inference latency in milliseconds
     """
     model.eval()
     model.to(device)
@@ -128,23 +96,12 @@ def run_all_benchmarks(
     n_runs: int = 50,
 ) -> dict:
     """
-    Run all benchmarks on a model and return a combined results dict.
-
-    Args:
-        model: nn.Module to benchmark
-        input_tensor: example input (single batch, e.g. shape [1, 3, 256, 256])
-        device: device for latency measurement
-        n_warmup: warmup iterations for latency
-        n_runs: timed iterations for latency
-
-    Returns dict with:
-        total_params, trainable_params, flops, size_mb,
-        latency_mean_ms, latency_std_ms, latency_device
+    Run all benchmarks on a model and return a combined results dict
     """
     # Parameters
     params = count_parameters(model)
 
-    # FLOPs (always on CPU to avoid device issues with fvcore)
+    # FLOPs
     model_cpu = model.cpu().eval()
     input_cpu = input_tensor.cpu()
     flops = measure_flops(model_cpu, input_cpu)
@@ -169,18 +126,6 @@ def run_all_benchmarks(
 def measure_inference_latency(predict_fn, test_loader, device: str = "cpu") -> dict:
     """
     Measure real end-to-end inference latency by timing the predict function.
-
-    Runs predict() on the full test set and computes per-image latency.
-
-    Args:
-        predict_fn: callable that takes a test_loader and returns (scores, maps)
-        test_loader: the test DataLoader
-        device: "cpu" or "cuda" (used for cuda synchronization)
-
-    Returns dict with:
-        total_time_s: float     — total prediction time in seconds
-        num_images: int         — number of test images
-        per_image_ms: float     — average latency per image in ms
     """
     use_cuda = device.startswith("cuda") and torch.cuda.is_available()
 
@@ -207,7 +152,7 @@ def measure_inference_latency(predict_fn, test_loader, device: str = "cpu") -> d
 
 
 def print_inference_latency(results: dict, device: str = "cpu") -> None:
-    """Pretty-print inference latency results."""
+    """print inference latency results"""
     print(f"\n{'=' * 60}")
     print(f"Inference Latency ({device})")
     print(f"{'=' * 60}")
@@ -219,7 +164,7 @@ def print_inference_latency(results: dict, device: str = "cpu") -> None:
 
 
 def print_benchmark_results(results: dict, label: str = "Model") -> None:
-    """Pretty-print benchmark results."""
+    """print benchmark results"""
     print(f"\n{'=' * 60}")
     print(f"Benchmark Results: {label}")
     print(f"{'=' * 60}")
