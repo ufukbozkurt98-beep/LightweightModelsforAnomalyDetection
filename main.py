@@ -67,30 +67,22 @@ def main():
     elif METHOD.lower() == "simplenet":
         run_simplenet(train_loader, val_loader, test_loader)
     elif METHOD.lower() == "cflow":
-        # Backbone-specific CFlow hyperparameters
-        # MobileViT models need lower lr due to transformer feature distributions
-        if "mobilevit" in BACKBONE_KEY:
-            cflow_lr = 1e-4
-            cflow_coupling_blocks = 4
-            cflow_clamp_alpha = 3.0
-        else:
-            cflow_lr = 2e-4
-            cflow_coupling_blocks = 8
-            cflow_clamp_alpha = 1.9
-
+        # L2-normalize features for transformer backbones to stabilize NF training
+        normalize_feat = "mobilevit" in BACKBONE_KEY
         scores, maps, metrics = train_and_test_cflow(
             train_loader=train_loader,
             test_loader=test_loader,
             backbone_name=BACKBONE_KEY,
             device=device,
-            coupling_blocks=cflow_coupling_blocks,
+            coupling_blocks=8,
             condition_vec=128,
-            clamp_alpha=cflow_clamp_alpha,
+            clamp_alpha=1.9,
             N=256,
-            lr=cflow_lr,
+            lr=2e-4,
             meta_epochs=25,
             sub_epochs=8,
             input_size=IMAGE_INPUT_SIZE,
+            normalize_features=normalize_feat,
         )
     elif METHOD.lower() == "fastflow":
         scores, maps, metrics = train_and_test_fastflow(

@@ -218,7 +218,7 @@ class MobileFormer(nn.Module):
                 )
             )
 
-            # if this block downsamples, remember its index and channels (for l1/l2/l3).
+            # if this block downsamples, remember its index and channels (for l1/l2/l3)
             if s == 2:
                 self._stride2_flat_indices.append(flat_idx)
                 self._stage_out_channels_list.append(output_channel)
@@ -331,7 +331,7 @@ class MobileFormer(nn.Module):
         # take stem to get first CNN feature map
         x = self.stem(x)
 
-        tap_set = set(self._tap_indices) # where to save l1/l2/l3.
+        tap_set = set(self._tap_indices) # where to save l1/l2/l3
         collected: Dict[str, torch.Tensor] = {} # store the feature maps
         tap_counter = 0
 
@@ -345,7 +345,7 @@ class MobileFormer(nn.Module):
                 if tap_counter == 3:
                     break  # done, skip remaining blocks
 
-        # If we have fewer than 3 scales, reuse the last feature map.
+        # If we have fewer than 3 scales, reuse the last feature map
         while tap_counter < 3:
             tap_counter += 1
             collected[f"l{tap_counter}"] = x
@@ -354,7 +354,7 @@ class MobileFormer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Full forward pass with classifier head."""
-        # if no classifier head, return multi-scale features.
+        # if no classifier head, return multi-scale features
         if self.classifier is None:
             return self.forward_features(x)
 

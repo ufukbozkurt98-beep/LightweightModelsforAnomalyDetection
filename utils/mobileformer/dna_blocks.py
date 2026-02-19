@@ -273,7 +273,7 @@ class GlobalBlock(nn.Module):
             self.alpha_scale = 2.0
             self.alpha = nn.Sequential(nn.Linear(token_dim, token_dim), h_sigmoid())
 
-        # MLP over token positions (T dimension).
+        # MLP over token positions
         if "mlp" in self.block:
             self.token_mlp = nn.Sequential(
                 nn.Linear(token_num, token_num * mlp_token_exp),
@@ -833,7 +833,8 @@ class DnaBlock(nn.Module):
 
 
 class MergeClassifier(nn.Module):
-    """Classification head that merges CNN features and tokens
+    """
+    Classification head that merges CNN features and tokens
     not used in feature extraction mode
     """
 

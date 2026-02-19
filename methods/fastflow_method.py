@@ -26,10 +26,14 @@ def subnet_conv_func(kernel_size, hidden_ratio):
         # Padding to keep spatial size for 3×3.
         padding = kernel_size // 2
         # Subnet: Conv → ReLU → Conv
+        last_conv = nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding)
+        # Zero-init last conv so the flow starts as identity (from anomalib)
+        nn.init.zeros_(last_conv.weight)
+        nn.init.zeros_(last_conv.bias)
         return nn.Sequential(
             nn.Conv2d(in_channels, hidden_channels, kernel_size, padding=padding),
             nn.ReLU(),
-            nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding),
+            last_conv,
         )
 
     return subnet_conv
@@ -166,6 +170,7 @@ class FastFlowMethod:
         self.norms = None
         self.fast_flow_blocks = None
         self.optimizer = None
+        self.scheduler = None
         self.criterion = FastflowLoss()
         self.anomaly_map_generator = AnomalyMapGenerator(self.input_size).to(self.device)
 
@@ -217,6 +222,11 @@ class FastFlowMethod:
         # Optimize NF block and LayerNorm parameters, backbone is still frozen
         params = list(self.fast_flow_blocks.parameters()) + list(self.norms.parameters())
         self.optimizer = torch.optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
+
+        # Cosine annealing: LR decays smoothly from lr to near-zero over all epochs
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            self.optimizer, T_0=self.meta_epochs, eta_min=self.lr * 1e-3
+        )
 
         # Prints verification info
         print("\n" + "=" * 60)
@@ -274,6 +284,9 @@ class FastFlowMethod:
 
                 epoch_loss += loss.item()
                 batch_count += 1
+
+            # Step cosine annealing scheduler
+            self.scheduler.step(epoch)
 
             # print mean loss and lr
             if self.verbose:

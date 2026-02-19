@@ -17,7 +17,7 @@ def train_and_test_cflow(
     *,
     backbone_name: str = "mobilevit_s",
     device: str | None = None,
-    coupling_blocks: int = 4,
+    coupling_blocks: int = 8,
     condition_vec: int = 128,
     clamp_alpha: float = 1.9,
     N: int = 256,
@@ -25,6 +25,7 @@ def train_and_test_cflow(
     meta_epochs: int = 25,
     sub_epochs: int = 8,
     input_size: int = 256,
+    normalize_features: bool = False,
 ):
 
     if device is None:
@@ -50,6 +51,7 @@ def train_and_test_cflow(
         sub_epochs=sub_epochs,
         N=N,
         input_size=input_size,
+        normalize_features=normalize_features,
     )
 
     # Train
