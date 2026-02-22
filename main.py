@@ -67,8 +67,6 @@ def main():
     elif METHOD.lower() == "simplenet":
         run_simplenet(train_loader, val_loader, test_loader)
     elif METHOD.lower() == "cflow":
-        # L2-normalize features for transformer backbones to stabilize NF training
-        normalize_feat = "mobilevit" in BACKBONE_KEY
         scores, maps, metrics = train_and_test_cflow(
             train_loader=train_loader,
             test_loader=test_loader,
@@ -82,7 +80,6 @@ def main():
             meta_epochs=25,
             sub_epochs=8,
             input_size=IMAGE_INPUT_SIZE,
-            normalize_features=normalize_feat,
         )
     elif METHOD.lower() == "fastflow":
         scores, maps, metrics = train_and_test_fastflow(

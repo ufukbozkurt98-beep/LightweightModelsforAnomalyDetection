@@ -25,7 +25,6 @@ def train_and_test_cflow(
     meta_epochs: int = 25,
     sub_epochs: int = 8,
     input_size: int = 256,
-    normalize_features: bool = False,
 ):
 
     if device is None:
@@ -51,7 +50,6 @@ def train_and_test_cflow(
         sub_epochs=sub_epochs,
         N=N,
         input_size=input_size,
-        normalize_features=normalize_features,
     )
 
     # Train

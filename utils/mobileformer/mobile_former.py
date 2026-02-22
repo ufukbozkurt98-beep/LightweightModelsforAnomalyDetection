@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import math
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import torch
@@ -10,7 +10,6 @@ from .dna_blocks import (
     DnaBlock,
     DnaBlock3,
     Local2Global,
-    MergeClassifier,
     _make_divisible,
 )
 
@@ -98,6 +97,58 @@ _BLOCK_CLS = {
     "DnaBlock": DnaBlock,
     "DnaBlock3": DnaBlock3,
 }
+
+# Google Drive file IDs for pretrained ImageNet weights
+_PRETRAINED_GDRIVE_IDS = {
+    "mobileformer_508m": "1bqLIcpbCaxK-Eb4wcxk0iJpFJ1nXfGuF",
+    "mobileformer_294m": "1JBSM7NJ60fN9TgT5sMnbhmbZwrzcBd0r",
+    "mobileformer_52m": "1ekq_FPl57gjIlYX16Ll0nBuEyB0pjgGt",
+}
+
+_CACHE_DIR = Path.home() / ".cache" / "mobileformer"
+
+
+def _load_pretrained_weights(model: nn.Module, variant_name: str) -> None:
+    """Download pretrained weights from Google Drive and load into model."""
+    file_id = _PRETRAINED_GDRIVE_IDS.get(variant_name)
+    if file_id is None:
+        print(f"No pretrained weights available for {variant_name}")
+        return
+
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cached_path = _CACHE_DIR / f"{variant_name}.pth"
+
+    # Download if not cached
+    if not cached_path.exists():
+        try:
+            import gdown
+        except ImportError:
+            raise RuntimeError(
+                "gdown is required to download pretrained weights. "
+                "Install it with: pip install gdown"
+            )
+        url = f"https://drive.google.com/uc?id={file_id}"
+        print(f"Downloading {variant_name} pretrained weights...")
+        gdown.download(url, str(cached_path), quiet=False)
+
+    # Load checkpoint
+    checkpoint = torch.load(cached_path, map_location="cpu", weights_only=False)
+
+    # Handle different checkpoint formats
+    if "state_dict" in checkpoint:
+        state_dict = checkpoint["state_dict"]
+    elif "model" in checkpoint:
+        state_dict = checkpoint["model"]
+    else:
+        state_dict = checkpoint
+
+    # Load with strict=False to skip classifier keys
+    result = model.load_state_dict(state_dict, strict=False)
+    print(f"Loaded pretrained weights for {variant_name}")
+    if result.missing_keys:
+        print(f"  Missing keys (expected): {result.missing_keys}")
+    if result.unexpected_keys:
+        print(f"  Skipped keys (classifier etc.): {result.unexpected_keys}")
 
 
 class MobileFormer(nn.Module):
@@ -299,25 +350,6 @@ class MobileFormer(nn.Module):
         self._tap_indices: List[int] = self._stride2_flat_indices[:3]
         self.stage_out_channels: List[int] = self._stage_out_channels_list[:3]
 
-        # Initialize weights
-        self._initialize_weights()
-
-    # Initialize weights for Conv/BN/Linear layers
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2.0 / n))
-                if m.bias is not None:
-                    m.bias.data.zero_()
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            elif isinstance(m, nn.Linear):
-                n = m.weight.size(1)
-                m.weight.data.normal_(0, 0.01)
-                m.bias.data.zero_()
-
     def forward_features(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         Extract multi-scale features
@@ -371,7 +403,7 @@ class MobileFormer(nn.Module):
 
 
 def _build_mobile_former(variant_name: str, num_classes: int = 0, **overrides) -> MobileFormer:
-    """Build a MobileFormer variant by name."""
+    """Build a pretrained MobileFormer variant by name."""
     cfg = _VARIANT_CONFIGS[variant_name]
 
     kwargs = dict(
@@ -389,7 +421,9 @@ def _build_mobile_former(variant_name: str, num_classes: int = 0, **overrides) -
         **_COMMON_KWARGS,
     )
     kwargs.update(overrides)
-    return MobileFormer(**kwargs)
+    model = MobileFormer(**kwargs)
+    _load_pretrained_weights(model, variant_name)
+    return model
 
 
 def mobileformer_508m(num_classes: int = 0) -> MobileFormer:

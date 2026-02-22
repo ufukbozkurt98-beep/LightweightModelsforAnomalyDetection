@@ -169,7 +169,7 @@ class _MobileFormerFeaturesOnly(nn.Module):
     """
     Extract multi-scale features using MobileFormer (CVPR 2022).
     Returns {"l1", "l2", "l3"} from the first three stride-2 stages.
-    No pretrained weights (trained from scratch).
+    Pretrained ImageNet weights from the official repo.
     """
 
     _CONFIGS = {
@@ -188,7 +188,7 @@ class _MobileFormerFeaturesOnly(nn.Module):
                 f"Available: {sorted(self._CONFIGS)}"
             )
 
-        # num_classes=0 disables the classifier head
+        # num_classes=0 disables the classifier head, always loads pretrained weights
         self.backbone = _build_mobile_former(model_name, num_classes=0)
 
         # Store feature channel counts for each level
