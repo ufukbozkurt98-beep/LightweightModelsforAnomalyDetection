@@ -188,8 +188,8 @@ class _MobileFormerFeaturesOnly(nn.Module):
                 f"Available: {sorted(self._CONFIGS)}"
             )
 
-        # num_classes=0 disables the classifier head, always loads pretrained weights
-        self.backbone = _build_mobile_former(model_name, num_classes=0)
+        # Always loads pretrained weights
+        self.backbone = _build_mobile_former(model_name)
 
         # Store feature channel counts for each level
         self.feature_channels = {

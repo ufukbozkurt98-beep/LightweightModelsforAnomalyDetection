@@ -9,7 +9,6 @@ import torch.nn as nn
 from .dna_blocks import (
     DnaBlock,
     DnaBlock3,
-    Local2Global,
     _make_divisible,
 )
 
@@ -19,15 +18,12 @@ _COMMON_KWARGS = dict(
     dw_conv="dw",
     kernel_size=(3, 3),
     cnn_exp=(6, 4),
-    cls_token_num=1,
     hyper_token_id=0,
     hyper_reduction_ratio=4,
     attn_num_heads=2,
     gbr_norm="post",
     mlp_token_exp=4,
     gbr_before_skip=False,
-    gbr_drop=[0.0, 0.0],
-    last_act="relu",
     remove_proj_local=True,
 )
 
@@ -37,7 +33,6 @@ _VARIANT_CONFIGS = {
         stem_chs=24,
         token_num=6,
         token_dim=192,
-        num_features=1920,
         block_args=[
             ["DnaBlock3", 2, 24, 1, 1, 0],
             ["DnaBlock3", 6, 40, 1, 2, 4],
@@ -57,7 +52,6 @@ _VARIANT_CONFIGS = {
         stem_chs=16,
         token_num=6,
         token_dim=192,
-        num_features=1920,
         block_args=[
             ["DnaBlock3", 2, 16, 1, 1, 0],
             ["DnaBlock3", 6, 24, 1, 2, 4],
@@ -77,7 +71,6 @@ _VARIANT_CONFIGS = {
         stem_chs=8,
         token_num=3,
         token_dim=128,
-        num_features=1024,
         block_args=[
             ["DnaBlock3", 3, 12, 1, 2, 0],
             ["DnaBlock", 3, 12, 1, 1, 3],
@@ -142,7 +135,7 @@ def _load_pretrained_weights(model: nn.Module, variant_name: str) -> None:
     else:
         state_dict = checkpoint
 
-    # Load with strict=False to skip classifier keys
+    # Load with strict=False to skip classifier/local_global keys
     result = model.load_state_dict(state_dict, strict=False)
     print(f"Loaded pretrained weights for {variant_name}")
     if result.missing_keys:
@@ -153,18 +146,16 @@ def _load_pretrained_weights(model: nn.Module, variant_name: str) -> None:
 
 class MobileFormer(nn.Module):
     """
-    Full Mobile-Former network
+    Mobile-Former feature extractor (pretrained, no classifier)
     """
 
     def __init__(
         self,
         block_args: List[list],
-        num_classes: int = 1000,
         img_size: int = 224,
         width_mult: float = 1.0,
         in_chans: int = 3,
         stem_chs: int = 16,
-        num_features: int = 1280,
         dw_conv: str = "dw",
         kernel_size: Tuple[int, int] = (3, 3),
         cnn_exp: Tuple[int, int] = (6, 4),
@@ -174,17 +165,12 @@ class MobileFormer(nn.Module):
         hyper_reduction_ratio: int = 4,
         token_dim: int = 128,
         token_num: int = 6,
-        cls_token_num: int = 1,
-        last_act: str = "relu",
-        last_exp: int = 6,
         gbr_type: str = "mlp",
         gbr_dynamic: list | None = None,
         gbr_norm: str = "post",
         gbr_ffn: bool = False,
         gbr_before_skip: bool = False,
-        gbr_drop: list | None = None,
         mlp_token_exp: int = 4,
-        drop_rate: float = 0.0,
         drop_path_rate: float = 0.0,
         cnn_drop_path_rate: float = 0.0,
         attn_num_heads: int = 2,
@@ -196,13 +182,10 @@ class MobileFormer(nn.Module):
             se_flag = [2, 0, 2, 0]
         if gbr_dynamic is None:
             gbr_dynamic = [False, False, False]
-        if gbr_drop is None:
-            gbr_drop = [0.0, 0.0]
 
         # Prepares drop-path and divisibility divisor for channel rounding
         cnn_drop_path_rate = drop_path_rate
         mdiv = 8 if width_mult > 1.01 else 4
-        self.num_classes = num_classes
 
         # Learnable global tokens
         self.tokens = nn.Embedding(token_num, token_dim)
@@ -313,39 +296,6 @@ class MobileFormer(nn.Module):
 
         self.features = nn.ModuleList(layers)
 
-        # Final local-to-global bridge
-        self.local_global = Local2Global(
-            input_channel,
-            block_type=gbr_type,
-            token_dim=token_dim,
-            token_num=token_num,
-            inp_res=inp_res,
-            use_dynamic=gbr_dynamic[0],
-            norm_pos=gbr_norm,
-            drop_path_rate=drop_path_rate,
-            attn_num_heads=attn_num_heads,
-        )
-
-        # Classifier head
-        # skip if num_classes=0, we only need features for this task
-        if num_classes > 0:
-            self.classifier = MergeClassifier(
-                input_channel,
-                oup=num_features,
-                ch_exp=last_exp,
-                num_classes=num_classes,
-                drop_rate=drop_rate,
-                drop_branch=gbr_drop,
-                group_num=group_num,
-                token_dim=token_dim,
-                cls_token_num=cls_token_num,
-                last_act=last_act,
-                hyper_token_id=hyper_token_id,
-                hyper_reduction_ratio=hyper_reduction_ratio,
-            )
-        else:
-            self.classifier = None
-
         # First 3 stride-2 blocks give us l1, l2, l3 feature maps
         self._tap_indices: List[int] = self._stride2_flat_indices[:3]
         self.stage_out_channels: List[int] = self._stage_out_channels_list[:3]
@@ -384,25 +334,8 @@ class MobileFormer(nn.Module):
 
         return collected
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Full forward pass with classifier head."""
-        # if no classifier head, return multi-scale features
-        if self.classifier is None:
-            return self.forward_features(x)
 
-        bs = x.shape[0]
-        # # Full forward: run all blocks, update tokens, then classify
-        z = self.tokens.weight
-        tokens = z[None].repeat(bs, 1, 1).clone().permute(1, 0, 2)
-        x = self.stem(x)
-        for block in self.features:
-            x, tokens = block((x, tokens))
-        tokens, _attn = self.local_global((x, tokens))
-        y = self.classifier((x, tokens))
-        return y
-
-
-def _build_mobile_former(variant_name: str, num_classes: int = 0, **overrides) -> MobileFormer:
+def _build_mobile_former(variant_name: str, **overrides) -> MobileFormer:
     """Build a pretrained MobileFormer variant by name."""
     cfg = _VARIANT_CONFIGS[variant_name]
 
@@ -411,8 +344,6 @@ def _build_mobile_former(variant_name: str, num_classes: int = 0, **overrides) -
         stem_chs=cfg["stem_chs"],
         token_num=cfg["token_num"],
         token_dim=cfg["token_dim"],
-        num_features=cfg["num_features"],
-        num_classes=num_classes,
         se_flag=[2, 0, 2, 0],
         group_num=1,
         gbr_type="attn",
@@ -426,16 +357,16 @@ def _build_mobile_former(variant_name: str, num_classes: int = 0, **overrides) -
     return model
 
 
-def mobileformer_508m(num_classes: int = 0) -> MobileFormer:
+def mobileformer_508m() -> MobileFormer:
     """MobileFormer 508M FLOPs"""
-    return _build_mobile_former("mobileformer_508m", num_classes=num_classes)
+    return _build_mobile_former("mobileformer_508m")
 
 
-def mobileformer_294m(num_classes: int = 0) -> MobileFormer:
+def mobileformer_294m() -> MobileFormer:
     """MobileFormer 294M FLOPs"""
-    return _build_mobile_former("mobileformer_294m", num_classes=num_classes)
+    return _build_mobile_former("mobileformer_294m")
 
 
-def mobileformer_52m(num_classes: int = 0) -> MobileFormer:
+def mobileformer_52m() -> MobileFormer:
     """MobileFormer 52M FLOPs"""
-    return _build_mobile_former("mobileformer_52m", num_classes=num_classes)
+    return _build_mobile_former("mobileformer_52m")
