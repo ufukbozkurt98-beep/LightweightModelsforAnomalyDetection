@@ -3,7 +3,7 @@ from pathlib import Path
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-CATEGORY = "pill"
+CATEGORY = "transistor"
 VAL_RATIO = 0.2
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
