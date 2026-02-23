@@ -337,10 +337,18 @@ class FastFlowMethod:
             if eval_fn is not None and (epoch + 1) % eval_every == 0:
                 self.norms.eval()
                 self.fast_flow_blocks.eval()
-                metric = eval_fn()
+                result = eval_fn()
+                # Support both scalar and (combined, img, pix) tuple
+                if isinstance(result, tuple):
+                    metric, img_auc, pix_auc = result
+                else:
+                    metric, img_auc, pix_auc = result, None, None
                 if self.verbose:
-                    print(f"  >> eval @ epoch {epoch}: combined={metric:.4f}"
-                          f"{'  ★ new best' if metric > self._best_metric else ''}")
+                    detail = f"combined={metric:.4f}"
+                    if img_auc is not None:
+                        detail += f"  img={img_auc:.4f}  pix={pix_auc:.4f}"
+                    best_flag = "  ★ new best" if metric > self._best_metric else ""
+                    print(f"  >> eval @ epoch {epoch}: {detail}{best_flag}")
                 if metric > self._best_metric:
                     self._best_metric = metric
                     self._best_epoch = epoch

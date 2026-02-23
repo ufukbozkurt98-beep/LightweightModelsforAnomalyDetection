@@ -63,7 +63,8 @@ def train_and_test_fastflow(
         scores, maps = fastflow.predict(test_loader)
         pix = pixel_level_auroc(y_pix, maps)
         img = image_level_auroc(y_img, scores)
-        return (img + pix) / 2
+        combined = (img + pix) / 2
+        return combined, img, pix
 
     # Train with periodic evaluation every 10 epochs
     fastflow.fit(train_loader, eval_fn=_eval_fn, eval_every=10)
