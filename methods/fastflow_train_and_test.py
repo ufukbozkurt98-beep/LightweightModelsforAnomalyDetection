@@ -58,11 +58,12 @@ def train_and_test_fastflow(
     # Collect ground truth early so eval_fn can use it during training
     y_img, y_pix = collect_gt_from_loader(test_loader)
 
-    # Build eval callback: evaluates pixel AUROC on test set for best-epoch selection
-    # (matches anomalib's early-stopping protocol)
+    # Build eval callback: combined (image + pixel) AUROC for best-epoch selection
     def _eval_fn():
         scores, maps = fastflow.predict(test_loader)
-        return pixel_level_auroc(y_pix, maps)
+        pix = pixel_level_auroc(y_pix, maps)
+        img = image_level_auroc(y_img, scores)
+        return (img + pix) / 2
 
     # Train with periodic evaluation every 10 epochs
     fastflow.fit(train_loader, eval_fn=_eval_fn, eval_every=10)

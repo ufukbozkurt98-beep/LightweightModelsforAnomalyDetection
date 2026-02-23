@@ -339,7 +339,7 @@ class FastFlowMethod:
                 self.fast_flow_blocks.eval()
                 metric = eval_fn()
                 if self.verbose:
-                    print(f"  >> eval @ epoch {epoch}: pixel_auroc={metric:.4f}"
+                    print(f"  >> eval @ epoch {epoch}: combined={metric:.4f}"
                           f"{'  ★ new best' if metric > self._best_metric else ''}")
                 if metric > self._best_metric:
                     self._best_metric = metric
@@ -353,7 +353,7 @@ class FastFlowMethod:
             self._load_best_state()
             if self.verbose:
                 print(f"\n  Restored best model from epoch {self._best_epoch} "
-                      f"(pixel_auroc={self._best_metric:.4f})")
+                      f"(combined={self._best_metric:.4f})")
 
         #  training is done
         self.norms.eval()
