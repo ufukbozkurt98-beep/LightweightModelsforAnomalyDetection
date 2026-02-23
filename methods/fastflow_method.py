@@ -122,9 +122,10 @@ class AnomalyMapGenerator(nn.Module):
                 align_corners=False,
             )
             flow_maps.append(flow_map)
-        # Stack and average across scales
+        # Stack and weight across scales (l1=high-res gets most weight)
         flow_maps = torch.stack(flow_maps, dim=-1)
-        anomaly_map = torch.mean(flow_maps, dim=-1)
+        weights = torch.tensor([0.5, 0.3, 0.2], device=flow_maps.device)
+        anomaly_map = torch.sum(flow_maps * weights.view(1, 1, 1, 1, -1), dim=-1)
 
         # Gaussian smoothing to reduce pixel-level noise
         pad = self._gauss_kernel.shape[-1] // 2
@@ -400,8 +401,10 @@ class FastFlowMethod:
             # Generate anomaly map
             anomaly_map = self.anomaly_map_generator(hidden_variables)  # (B, 1, H, W)
 
-            # Image-level score, max value in the anomaly map
-            pred_score = torch.amax(anomaly_map, dim=(-2, -1))
+            # Image-level score: max + mean for robustness against noisy peaks
+            max_score = torch.amax(anomaly_map, dim=(-2, -1))
+            mean_score = torch.mean(anomaly_map, dim=(-2, -1))
+            pred_score = max_score + mean_score
             pred_score = pred_score.squeeze(1)
 
             all_scores.append(pred_score.cpu())
