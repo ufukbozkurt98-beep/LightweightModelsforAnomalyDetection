@@ -87,7 +87,7 @@ class AnomalyMapGenerator(nn.Module):
     Generates pixel-level anomaly heatmap with optional Gaussian smoothing
     """
 
-    def __init__(self, input_size, sigma=1.5):
+    def __init__(self, input_size, sigma=4.0):
         super().__init__()
         # check input size is a tuple
         self.input_size = tuple(input_size) if not isinstance(input_size, tuple) else input_size
