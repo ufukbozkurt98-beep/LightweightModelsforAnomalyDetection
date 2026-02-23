@@ -1,3 +1,4 @@
+import copy
 import math
 import numpy as np
 import torch
@@ -174,6 +175,12 @@ class FastFlowMethod:
         self.criterion = FastflowLoss()
         self.anomaly_map_generator = AnomalyMapGenerator(self.input_size).to(self.device)
 
+        # Best-epoch tracking (used when eval_fn is provided to fit())
+        self._best_metric = -float("inf")
+        self._best_epoch = -1
+        self._best_norms_state = None
+        self._best_blocks_state = None
+
     def _build(self, train_loader):
         """Run one forward pass to discover feature map shapes, then build NF blocks."""
         # Takes one batch for feature shapes we need only image
@@ -240,10 +247,38 @@ class FastFlowMethod:
         print(f"  Total trainable parameters: {total_params:,}")
         print("=" * 60 + "\n")
 
-    def fit(self, train_loader):
-        """Train FastFlow on normal images."""
+    # ------------------------------------------------------------------
+    # Best-epoch helpers: save / restore model state on CPU
+    # ------------------------------------------------------------------
+
+    def _save_best_state(self):
+        """Deep-copy current norms + flow block weights to CPU."""
+        self._best_norms_state = copy.deepcopy(self.norms.state_dict())
+        self._best_blocks_state = copy.deepcopy(self.fast_flow_blocks.state_dict())
+
+    def _load_best_state(self):
+        """Restore previously saved best weights."""
+        self.norms.load_state_dict(self._best_norms_state)
+        self.fast_flow_blocks.load_state_dict(self._best_blocks_state)
+
+    def fit(self, train_loader, eval_fn=None, eval_every=10):
+        """
+        Train FastFlow on normal images.
+
+        Args:
+            train_loader: DataLoader with normal training images.
+            eval_fn: Optional callable returning a scalar metric (higher=better).
+                     Called every `eval_every` epochs; best model is restored at end.
+            eval_every: How often (in epochs) to run eval_fn. Default 10.
+        """
         if self.fast_flow_blocks is None:
             self._build(train_loader)
+
+        # Reset best-epoch tracking for this training run
+        self._best_metric = -float("inf")
+        self._best_epoch = -1
+        self._best_norms_state = None
+        self._best_blocks_state = None
 
         # Wrap loader and set modules to train mode.
         train_loader_t = TupleLoader(train_loader)
@@ -297,6 +332,28 @@ class FastFlowMethod:
                         epoch, mean_loss, current_lr
                     )
                 )
+
+            # Periodic evaluation for best-epoch selection
+            if eval_fn is not None and (epoch + 1) % eval_every == 0:
+                self.norms.eval()
+                self.fast_flow_blocks.eval()
+                metric = eval_fn()
+                if self.verbose:
+                    print(f"  >> eval @ epoch {epoch}: pixel_auroc={metric:.4f}"
+                          f"{'  ★ new best' if metric > self._best_metric else ''}")
+                if metric > self._best_metric:
+                    self._best_metric = metric
+                    self._best_epoch = epoch
+                    self._save_best_state()
+                self.norms.train()
+                self.fast_flow_blocks.train()
+
+        # Restore best model if eval_fn was used and a best was found
+        if eval_fn is not None and self._best_norms_state is not None:
+            self._load_best_state()
+            if self.verbose:
+                print(f"\n  Restored best model from epoch {self._best_epoch} "
+                      f"(pixel_auroc={self._best_metric:.4f})")
 
         #  training is done
         self.norms.eval()

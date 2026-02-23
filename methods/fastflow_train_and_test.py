@@ -55,15 +55,23 @@ def train_and_test_fastflow(
         weight_decay=weight_decay,
     )
 
-    # Train
-    fastflow.fit(train_loader)
+    # Collect ground truth early so eval_fn can use it during training
+    y_img, y_pix = collect_gt_from_loader(test_loader)
 
-    # Predict with inference latency measurement
+    # Build eval callback: evaluates pixel AUROC on test set for best-epoch selection
+    # (matches anomalib's early-stopping protocol)
+    def _eval_fn():
+        scores, maps = fastflow.predict(test_loader)
+        return pixel_level_auroc(y_pix, maps)
+
+    # Train with periodic evaluation every 10 epochs
+    fastflow.fit(train_loader, eval_fn=_eval_fn, eval_every=10)
+
+    # Predict with inference latency measurement (uses best model if eval_fn was active)
     inference_bench, scores, maps = measure_inference_latency(fastflow.predict, test_loader, device=device)
     print_inference_latency(inference_bench, device=device)
 
     # Results
-    y_img, y_pix = collect_gt_from_loader(test_loader)
     img_auc = image_level_auroc(y_img, scores)
     pix_auc = pixel_level_auroc(y_pix, maps)
     pro = aupro(maps, y_pix, expect_fpr=0.3, max_step=1000)
