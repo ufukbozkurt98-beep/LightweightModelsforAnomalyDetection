@@ -219,7 +219,8 @@ class CFlowMethod:
                     if img_auc is not None:
                         detail += f"  img={img_auc:.4f}  pix={pix_auc:.4f}"
                     best_flag = "  ★ new best" if metric > self._best_metric else ""
-                    print(f"  >> eval @ epoch {epoch}: {detail}{best_flag}")
+                    best_info = f"  (best so far: epoch {self._best_epoch}, combined={self._best_metric:.4f})" if self._best_epoch >= 0 and metric <= self._best_metric else ""
+                    print(f"  >> eval @ epoch {epoch}: {detail}{best_flag}{best_info}")
                 if metric > self._best_metric:
                     self._best_metric = metric
                     self._best_epoch = epoch

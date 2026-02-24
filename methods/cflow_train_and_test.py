@@ -63,8 +63,8 @@ def train_and_test_cflow(
         combined = (img + pix) / 2
         return combined, img, pix
 
-    # Train with periodic evaluation every 5 meta-epochs
-    cflow.fit(train_loader, eval_fn=_eval_fn, eval_every=5)
+    # Train with evaluation every meta-epoch for best-epoch selection
+    cflow.fit(train_loader, eval_fn=_eval_fn, eval_every=1)
 
     # Predict with inference latency measurement (uses best model if eval_fn was active)
     inference_bench, scores, maps = measure_inference_latency(cflow.predict, test_loader, device=device)
