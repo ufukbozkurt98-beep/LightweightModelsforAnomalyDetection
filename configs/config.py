@@ -24,4 +24,4 @@ BACKBONE_KEY = "mobilenetv3_large"
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
 #METHOD = "cflow"
 #METHOD = "simplenet"
-METHOD = "fastflow"
+METHOD = "cflow"
