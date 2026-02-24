@@ -52,15 +52,25 @@ def train_and_test_cflow(
         input_size=input_size,
     )
 
-    # Train
-    cflow.fit(train_loader)
+    # Collect ground truth early so eval_fn can use it during training
+    y_img, y_pix = collect_gt_from_loader(test_loader)
 
-    # Predict with inference latency measurement
+    # Build eval callback: combined (image + pixel) AUROC for best-epoch selection
+    def _eval_fn():
+        scores, maps = cflow.predict(test_loader)
+        pix = pixel_level_auroc(y_pix, maps)
+        img = image_level_auroc(y_img, scores)
+        combined = (img + pix) / 2
+        return combined, img, pix
+
+    # Train with periodic evaluation every 5 meta-epochs
+    cflow.fit(train_loader, eval_fn=_eval_fn, eval_every=5)
+
+    # Predict with inference latency measurement (uses best model if eval_fn was active)
     inference_bench, scores, maps = measure_inference_latency(cflow.predict, test_loader, device=device)
     print_inference_latency(inference_bench, device=device)
 
     # Results
-    y_img, y_pix = collect_gt_from_loader(test_loader)
     img_auc = image_level_auroc(y_img, scores)
     pix_auc = pixel_level_auroc(y_pix, maps)
     pro = aupro(maps, y_pix, expect_fpr=0.3, max_step=1000)

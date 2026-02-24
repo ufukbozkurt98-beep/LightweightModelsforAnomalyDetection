@@ -1,3 +1,4 @@
+import copy
 import math
 import numpy as np
 import torch
@@ -117,6 +118,11 @@ class CFlowMethod:
         self.decoders = None
         self.optimizer = None
 
+        # Best-epoch tracking (used when eval_fn is provided to fit())
+        self._best_metric = -float("inf")
+        self._best_epoch = -1
+        self._best_decoder_states = None
+
     # Initialize model for training
     def _build(self, train_loader):
         # After converting the train_loader to tuple, take the first batch
@@ -149,10 +155,37 @@ class CFlowMethod:
             print(f"{layer} -> Shape: {feat.shape}, Channels: {pool_dims[i]}")
         print("=" * 60 + "\n")
 
-    def fit(self, train_loader):
+    # ------------------------------------------------------------------
+    # Best-epoch helpers: save / restore decoder states
+    # ------------------------------------------------------------------
+
+    def _save_best_state(self):
+        """Deep-copy current decoder weights."""
+        self._best_decoder_states = [copy.deepcopy(d.state_dict()) for d in self.decoders]
+
+    def _load_best_state(self):
+        """Restore previously saved best decoder weights."""
+        for d, state in zip(self.decoders, self._best_decoder_states):
+            d.load_state_dict(state)
+
+    def fit(self, train_loader, eval_fn=None, eval_every=5):
+        """
+        Train CFlow decoders on normal images.
+
+        Args:
+            train_loader: DataLoader with normal training images.
+            eval_fn: Optional callable returning a scalar metric (higher=better).
+                     Called every `eval_every` meta-epochs; best model is restored at end.
+            eval_every: How often (in meta-epochs) to run eval_fn. Default 5.
+        """
         # Build decoders and optimizer if not built yet
         if self.decoders is None:
             self._build(train_loader)
+
+        # Reset best-epoch tracking for this training run
+        self._best_metric = -float("inf")
+        self._best_epoch = -1
+        self._best_decoder_states = None
 
         # Ensure the loader yields (image, label, mask) tuples
         train_loader_t = TupleLoader(train_loader)
@@ -171,6 +204,35 @@ class CFlowMethod:
                 self.pool_layers,
                 self.N,
             )
+
+            # Periodic evaluation for best-epoch selection
+            if eval_fn is not None and (epoch + 1) % eval_every == 0:
+                self.decoders = [d.eval() for d in self.decoders]
+                result = eval_fn()
+                # Support both scalar and (combined, img, pix) tuple
+                if isinstance(result, tuple):
+                    metric, img_auc, pix_auc = result
+                else:
+                    metric, img_auc, pix_auc = result, None, None
+                if self.c.verbose:
+                    detail = f"combined={metric:.4f}"
+                    if img_auc is not None:
+                        detail += f"  img={img_auc:.4f}  pix={pix_auc:.4f}"
+                    best_flag = "  ★ new best" if metric > self._best_metric else ""
+                    print(f"  >> eval @ epoch {epoch}: {detail}{best_flag}")
+                if metric > self._best_metric:
+                    self._best_metric = metric
+                    self._best_epoch = epoch
+                    self._save_best_state()
+                self.decoders = [d.train() for d in self.decoders]
+
+        # Restore best model if eval_fn was used and a best was found
+        if eval_fn is not None and self._best_decoder_states is not None:
+            self._load_best_state()
+            if self.c.verbose:
+                print(f"\n  Restored best model from epoch {self._best_epoch} "
+                      f"(combined={self._best_metric:.4f})")
+
         # Switch decoders to evaluation mode after training
         self.decoders = [d.eval() for d in self.decoders]
 
