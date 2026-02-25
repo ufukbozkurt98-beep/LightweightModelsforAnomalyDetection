@@ -5,7 +5,7 @@ import os
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
 DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
-CATEGORY = "cable"
+CATEGORY = "hazelnut"
 VAL_RATIO = 0.0
 SEED = 42
 BATCH_SIZE = 8
