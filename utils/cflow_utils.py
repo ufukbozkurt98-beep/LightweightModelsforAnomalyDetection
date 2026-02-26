@@ -239,7 +239,7 @@ def test_meta_epoch(c, epoch, loader, encoder, decoders, pool_layers, N):
     fps = (len(loader.loader.dataset) / (time.time() - start))
     mean_test_loss = test_loss / test_count
     if c.verbose:
-        print("Epoch: {:d} \t test_loss: {:.4f} and {:.2f} fps".format(epoch, mean_test_loss, fps))
+        print("Eval: test_loss: {:.4f}, fps: {:.2f}".format(mean_test_loss, fps))
 
     return height, width, image_list, test_dist, gt_label_list, gt_mask_list
 
