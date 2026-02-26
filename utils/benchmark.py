@@ -1,18 +1,5 @@
 """
 benchmark.py  –  Model measurement utilities
-=============================================
-This file contains ONLY measurement functions. No training, no loops.
-
-Import and call these from your runner or notebook after training is done:
-
-    from benchmark import run_all_benchmarks, measure_inference_latency
-    from benchmark import measure_gpu_memory_mb, reset_gpu_peak
-
-GPU memory usage example (wrap around your training call):
-    reset_gpu_peak(device)
-    best = sn.train(train_loader, test_loader)
-    peak_mb = measure_gpu_memory_mb(device)
-    print(f"Peak GPU memory during training: {peak_mb:.0f} MB")
 """
 
 import os
