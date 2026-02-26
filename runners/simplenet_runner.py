@@ -21,6 +21,7 @@ from configs.config import BACKBONE_KEY
 from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
 import shutil
+from benchmark import reset_gpu_peak, measure_gpu_memory_mb
 
 def run_simplenet(train_loader, val_loader, test_loader):
 
@@ -134,5 +135,8 @@ def run_simplenet(train_loader, val_loader, test_loader):
     sn.set_model_dir(str(REPORTS_DIR / "simplenet_runs"), CATEGORY)
 
     # Train and evaluate
+    reset_gpu_peak(device)
     best = sn.train(train_loader, test_loader)
+    peak_mb = measure_gpu_memory_mb(device)
     print("Best record:", best)
+    print(f"Peak GPU memory during training: {peak_mb:.0f} MB")
