@@ -21,6 +21,8 @@ from configs.config import BACKBONE_KEY
 
 from configs.config import DTD_PATH
 
+from benchmark import reset_gpu_peak, measure_gpu_memory_mb
+
 def run_glass(train_loader, val_loader, test_loader):
     # getting the first batch from the loaders and printing the sizes and the labels
     b = next(iter(train_loader))
@@ -118,7 +120,10 @@ def run_glass(train_loader, val_loader, test_loader):
     # That's why we send test_g instead of val_g to the training
     # But still, the test images ARE NOT being used for compute gradients, but to choose what is best epoch, so the model selection
     # We have done it this way since the authors of the glass have chosen a similar way as well for checkpoint selection, but we can alter this later
+    reset_gpu_peak(device)
     glass.trainer(train_g, test_g, name=CATEGORY)
+    peak_mb = measure_gpu_memory_mb(device)
+    print(f"Peak GPU memory during training: {peak_mb:.0f} MB")
 
     # counting and printing how many "good" and how many "anomalous" samples each block has
     from collections import Counter
