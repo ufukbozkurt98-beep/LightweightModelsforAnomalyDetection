@@ -21,7 +21,7 @@ from configs.config import BACKBONE_KEY
 from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
 import shutil
-from model_benchmark import reset_gpu_peak, measure_gpu_memory_mb
+from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb
 
 def run_simplenet(train_loader, val_loader, test_loader):
 
