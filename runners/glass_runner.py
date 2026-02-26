@@ -21,7 +21,7 @@ from configs.config import BACKBONE_KEY
 
 from configs.config import DTD_PATH
 
-from model_benchmark import reset_gpu_peak, measure_gpu_memory_mb
+from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb
 
 def run_glass(train_loader, val_loader, test_loader):
     # getting the first batch from the loaders and printing the sizes and the labels
