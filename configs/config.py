@@ -21,6 +21,6 @@ METHOD = "simplenet"
 
 # Set to True to run all 15 MVTec-AD categories in a loop.
 # When True, CATEGORY above is ignored.
-RUN_ALL = False
+RUN_ALL = True
 
 
