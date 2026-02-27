@@ -53,7 +53,7 @@ def run_one_category(category: str, data_root: str):
     if METHOD.lower() == "glass":
         run_glass(train_loader, val_loader, test_loader)
     elif METHOD.lower() == "simplenet":
-        run_simplenet(train_loader, val_loader, test_loader)
+        run_simplenet(train_loader, val_loader, test_loader, category=category)
     else:
         raise ValueError(f"Unknown METHOD: {METHOD}")
 
