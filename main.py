@@ -7,7 +7,8 @@ from runners.simplenet_runner import run_simplenet
 from pathlib import Path  # to enable to use path objects and /|\ handling
 
 from configs.config import (
-    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH,  METHOD, VAL_RATIO_CFLOW
+    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH,  METHOD, VAL_RATIO_CFLOW,
+    DTD_ZIP_PATH, DTD_ROOT
 )
 
 from utils.mvtec_extract import ensure_extracted
@@ -56,11 +57,14 @@ def main():
 
     # STLM has its own data loading (1024x1024, DTD textures, etc.)
     if METHOD.lower() == "stlm":
+        # Extract DTD textures if not already extracted
+        ensure_extracted(str(DTD_ZIP_PATH), str(DTD_ROOT))
+
         from runners.stlm_runner import run_stlm
         metrics = run_stlm(
             category=CATEGORY,
             mvtec_path=str(MVTEC_ROOT),
-            dtd_path="./data/dtd/images/",
+            dtd_path=str(DTD_ROOT / "images") + "/",
             mobile_sam_path="./weights/mobile_sam.pt",
             sam_vit_h_path="./weights/sam_vit_h_4b8939.pth",
         )
