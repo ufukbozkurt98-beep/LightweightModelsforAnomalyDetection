@@ -22,21 +22,27 @@ warnings.filterwarnings("ignore")
 
 def train(args, category, rotate_90=False, random_rotate=0):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"  Using device: {device}")
 
     # Initialize student (two-stream TinyViT)
+    print("  Loading student model (MobileSAM TinyViT)...")
     sam_checkpoint = args.mobile_sam_path
     model_type = "vit_t"
     sam_mode = "train"
     twostream = Batch_SamE(sam_checkpoint, model_type, sam_mode, device)
+    print("  Student model loaded.")
 
     # Initialize teacher (SAM ViT-H, frozen)
+    print("  Loading teacher model (SAM ViT-H, 2.4GB)... This may take a while.")
     sam_checkpoint = args.sam_vit_h_path
     model_type = "vit_h"
     sam_mode = "eval"
     fix_teacher = Batch_Sam(sam_checkpoint, model_type, sam_mode, device)
+    print("  Teacher model loaded.")
 
     # Feature aggregation module
     segmentation_net = SegmentationNet(512).to(device)
+    print("  All models loaded. Starting training...")
 
     # Define optimizers
     tlm_optimizer = torch.optim.Adam(twostream.parameters(), betas=(0.5, 0.999), lr=0.0005)
@@ -70,11 +76,15 @@ def train(args, category, rotate_90=False, random_rotate=0):
 
     global_step = 0
     flag = True
+    import time
 
     best_metrics = {"aupro_fa": 0, "auc_fa": 0, "auc_detect_fa": 0}
 
     while flag:
-        for _, data in enumerate(dataloader):
+        epoch_start = time.time()
+        num_batches = len(dataloader)
+        for batch_idx, data in enumerate(dataloader):
+            print(f"  Epoch {global_step+1}/{args.steps} | Batch {batch_idx+1}/{num_batches}", end="\r", flush=True)
             twostream.train()
             segmentation_net.train()
             tlm_optimizer.zero_grad()
@@ -150,6 +160,8 @@ def train(args, category, rotate_90=False, random_rotate=0):
             seg_optimizer.step()
 
         global_step += 1
+        epoch_time = time.time() - epoch_start
+        print(f"  Epoch {global_step}/{args.steps} completed in {epoch_time:.1f}s | loss={total_loss_val.item():.4f}")
 
         if global_step % args.eval_per_steps == 0:
             aupro_tlm, auc_tlm, auc_detect_tlm, aupro_fa, auc_fa, auc_detect_fa = evaluate(
