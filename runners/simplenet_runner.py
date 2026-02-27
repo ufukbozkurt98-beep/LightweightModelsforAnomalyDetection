@@ -21,7 +21,7 @@ from configs.config import BACKBONE_KEY
 from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
 import shutil
-from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb
+from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb, measure_inference_latency
 
 def run_simplenet(train_loader, val_loader, test_loader):
 
@@ -137,6 +137,23 @@ def run_simplenet(train_loader, val_loader, test_loader):
     # Train and evaluate
     reset_gpu_peak(device)
     best = sn.train(train_loader, test_loader)
-    peak_mb = measure_gpu_memory_mb(device)
-    print("Best record:", best)
-    print(f"Peak GPU memory during training: {peak_mb:.0f} MB")
+    gpu_train_mb = measure_gpu_memory_mb(device)
+
+    # Inference latency
+    reset_gpu_peak(device)
+    latency, _ = measure_inference_latency(sn.predict, test_loader, device=str(device))
+    gpu_infer_mb = measure_gpu_memory_mb(device)
+
+    # Print everything together in one block
+    print(f"\n{'='*55}")
+    print(f"  PER-CATEGORY BENCHMARK: {CATEGORY.upper()}")
+    print(f"{'='*55}")
+    print(f"  Best I-AUROC : {best[0]:.4f}")
+    print(f"  Best P-AUROC : {best[1]:.4f}")
+    print(f"  Best PRO     : {best[2]:.4f}")
+    print(f"  GPU (train)  : {gpu_train_mb:.0f} MB")
+    print(f"  GPU (infer)  : {gpu_infer_mb:.0f} MB")
+    print(f"  Infer total  : {latency['total_time_s']:.3f} s")
+    print(f"  Infer/image  : {latency['per_image_ms']:.2f} ms")
+    print(f"  Throughput   : {latency['throughput_fps']:.1f} FPS")
+    print(f"{'='*55}\n")
