@@ -58,7 +58,24 @@ def main():
     # STLM has its own data loading (1024x1024, DTD textures, etc.)
     if METHOD.lower() == "stlm":
         # Extract DTD textures if not already extracted
-        ensure_extracted(str(DTD_ZIP_PATH), str(DTD_ROOT))
+        # DTD tar.gz contains a top-level 'dtd/' folder inside,
+        # so we extract into data/ (parent) which creates data/dtd/images/
+        dtd_images_dir = DTD_ROOT / "images"
+        if not dtd_images_dir.exists():
+            import tarfile, zipfile
+            archive_path = Path(DTD_ZIP_PATH)
+            if not archive_path.exists():
+                raise FileNotFoundError(f"DTD archive not found: {archive_path}")
+            print(f"Extracting DTD: {archive_path} -> {DTD_ROOT.parent}")
+            if tarfile.is_tarfile(archive_path):
+                with tarfile.open(archive_path, "r:*") as tar:
+                    tar.extractall(path=str(DTD_ROOT.parent))
+            elif zipfile.is_zipfile(archive_path):
+                with zipfile.ZipFile(archive_path, 'r') as zf:
+                    zf.extractall(path=str(DTD_ROOT.parent))
+            print(f"DTD extracted to: {DTD_ROOT}")
+        else:
+            print(f"DTD already exists: {dtd_images_dir}")
 
         from runners.stlm_runner import run_stlm
         metrics = run_stlm(
