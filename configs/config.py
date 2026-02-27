@@ -25,4 +25,4 @@ BACKBONE_KEY = "mobileformer_508m"  # MobileFormer 508M FLOPs (14.0M params)
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
 #METHOD = "cflow"
 #METHOD = "simplenet"
-METHOD = "cflow"
+METHOD = "stlm"

@@ -32,24 +32,39 @@ def main():
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # dataset check and train/val split
-    if METHOD.lower() not in ("cflow", "fastflow"):
-        scan_and_split(
-            mvtec_root=Path(data_root),
-            out_dir=REPORTS_DIR,
-            category=CATEGORY,
-            val_ratio=VAL_RATIO,
-            seed=SEED
-        )
-    else:
-        scan_and_split(
-            mvtec_root=Path(data_root),
-            out_dir=REPORTS_DIR,
-            category=CATEGORY,
-            val_ratio= VAL_RATIO_CFLOW,
-            seed=SEED
-        )
+    # dataset check and train/val split (STLM handles its own data)
+    if METHOD.lower() not in ("stlm",):
+        if METHOD.lower() not in ("cflow", "fastflow"):
+            scan_and_split(
+                mvtec_root=Path(data_root),
+                out_dir=REPORTS_DIR,
+                category=CATEGORY,
+                val_ratio=VAL_RATIO,
+                seed=SEED
+            )
+        else:
+            scan_and_split(
+                mvtec_root=Path(data_root),
+                out_dir=REPORTS_DIR,
+                category=CATEGORY,
+                val_ratio= VAL_RATIO_CFLOW,
+                seed=SEED
+            )
 
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # STLM has its own data loading (1024x1024, DTD textures, etc.)
+    if METHOD.lower() == "stlm":
+        from runners.stlm_runner import run_stlm
+        metrics = run_stlm(
+            category=CATEGORY,
+            mvtec_path=str(MVTEC_ROOT),
+            dtd_path="./data/dtd/images/",
+            mobile_sam_path="./weights/mobile_sam.pt",
+            sam_vit_h_path="./weights/sam_vit_h_4b8939.pth",
+        )
+        return
 
     # building the data loaders
     train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
@@ -61,7 +76,6 @@ def main():
     test_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                        batch_size=BATCH_SIZE)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if METHOD.lower() == "glass":
         run_glass(train_loader, val_loader, test_loader)

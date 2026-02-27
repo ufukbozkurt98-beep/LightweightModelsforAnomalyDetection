@@ -17,6 +17,7 @@ warnings.filterwarnings("ignore")
 
 
 def evaluate(args, category, twostream, segmentation_net):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     twostream.eval()
     segmentation_net.eval()
     with torch.no_grad():
@@ -30,17 +31,17 @@ def evaluate(args, category, twostream, segmentation_net):
         )
 
         # w/o FA
-        tlm_AUPRO = AUPRO().cuda()
-        tlm_AUROC = AUROC().cuda()
-        tlm_detect_AUROC = AUROC().cuda()
+        tlm_AUPRO = AUPRO().to(device)
+        tlm_AUROC = AUROC().to(device)
+        tlm_detect_AUROC = AUROC().to(device)
         # with FA
-        fa_AUPRO = AUPRO().cuda()
-        fa_AUROC = AUROC().cuda()
-        fa_detect_AUROC = AUROC().cuda()
+        fa_AUPRO = AUPRO().to(device)
+        fa_AUROC = AUROC().to(device)
+        fa_detect_AUROC = AUROC().to(device)
 
         for _, sample_batched in enumerate(dataloader):
-            img = sample_batched["img"].cuda()
-            mask = sample_batched["mask"].to(torch.int64).cuda()
+            img = sample_batched["img"].to(device)
+            mask = sample_batched["mask"].to(torch.int64).to(device)
 
             pfeature, dfeature = twostream(img)
 

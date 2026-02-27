@@ -71,7 +71,11 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
     print(f"  teacher: SAM ViT-H ({sam_vit_h_path})")
     print(f"  student: MobileSAM TinyViT ({mobile_sam_path})")
 
-    with torch.cuda.device(gpu_id):
+    if torch.cuda.is_available():
+        with torch.cuda.device(gpu_id):
+            metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate)
+    else:
+        print("  WARNING: No CUDA GPU found. Running on CPU (will be very slow).")
         metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate)
 
     return metrics
