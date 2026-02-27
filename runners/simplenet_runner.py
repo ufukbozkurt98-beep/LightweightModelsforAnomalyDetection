@@ -26,8 +26,10 @@ from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb, measure
 import json
 from pathlib import Path
 
-def run_simplenet(train_loader, val_loader, test_loader):
+def run_simplenet(train_loader, val_loader, test_loader, category=None):
 
+    if category is None:
+        category = CATEGORY
 
     checkpoint_dir = REPORTS_DIR / "simplenet_runs" / CATEGORY
     if checkpoint_dir.exists():
@@ -135,7 +137,7 @@ def run_simplenet(train_loader, val_loader, test_loader):
         dsc_margin=0.5,      
     )
 
-    sn.set_model_dir(str(REPORTS_DIR / "simplenet_runs"), CATEGORY)
+    sn.set_model_dir(str(REPORTS_DIR / "simplenet_runs"), category)
 
     # Train and evaluate
     reset_gpu_peak(device)
@@ -149,7 +151,7 @@ def run_simplenet(train_loader, val_loader, test_loader):
 
     # Print everything together in one block
     print(f"\n{'='*55}")
-    print(f"  PER-CATEGORY BENCHMARK: {CATEGORY.upper()}")
+    print(f"  PER-CATEGORY BENCHMARK: {category.upper()}")
     print(f"{'='*55}")
     print(f"  Best I-AUROC : {best[0]:.4f}")
     print(f"  Best P-AUROC : {best[1]:.4f}")
@@ -165,7 +167,7 @@ def run_simplenet(train_loader, val_loader, test_loader):
     results_dir.mkdir(parents=True, exist_ok=True)
 
     category_result = {
-        "category"       : CATEGORY,
+        "category"       : category,
         "i_auroc"        : round(float(best[0]), 4),
         "p_auroc"        : round(float(best[1]), 4),
         "pro"            : round(float(best[2]), 4),
@@ -176,6 +178,6 @@ def run_simplenet(train_loader, val_loader, test_loader):
         "throughput_fps" : latency["throughput_fps"],
     }
 
-    out_path = results_dir / f"{CATEGORY}_results.json"
+    out_path = results_dir / f"{category}_results.json"
     out_path.write_text(json.dumps(category_result, indent=2))
     print(f"  [saved → {out_path}]")
