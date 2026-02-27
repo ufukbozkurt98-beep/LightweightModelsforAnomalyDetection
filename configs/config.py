@@ -1,6 +1,7 @@
 # configs/config.py
 from pathlib import Path
 
+
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
 CATEGORY = "cable"

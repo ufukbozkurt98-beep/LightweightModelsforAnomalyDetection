@@ -50,6 +50,7 @@ def main():
             seed=SEED
         )
 
+
     # building the data loaders
     train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON, input_size=IMAGE_INPUT_SIZE,
                                         batch_size=BATCH_SIZE)
