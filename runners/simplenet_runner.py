@@ -31,7 +31,7 @@ def run_simplenet(train_loader, val_loader, test_loader, category=None):
     if category is None:
         category = CATEGORY
 
-    checkpoint_dir = REPORTS_DIR / "simplenet_runs" / CATEGORY
+    checkpoint_dir = REPORTS_DIR / "simplenet_runs" / category
     if checkpoint_dir.exists():
         shutil.rmtree(checkpoint_dir)
     
