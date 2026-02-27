@@ -23,6 +23,9 @@ from torch.utils.data import DataLoader
 import shutil
 from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb, measure_inference_latency
 
+import json
+from pathlib import Path
+
 def run_simplenet(train_loader, val_loader, test_loader):
 
 
@@ -157,3 +160,22 @@ def run_simplenet(train_loader, val_loader, test_loader):
     print(f"  Infer/image  : {latency['per_image_ms']:.2f} ms")
     print(f"  Throughput   : {latency['throughput_fps']:.1f} FPS")
     print(f"{'='*55}\n")
+
+    results_dir = REPORTS_DIR / "benchmark_results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    category_result = {
+        "category"       : CATEGORY,
+        "i_auroc"        : round(float(best[0]), 4),
+        "p_auroc"        : round(float(best[1]), 4),
+        "pro"            : round(float(best[2]), 4),
+        "gpu_train_mb"   : round(gpu_train_mb, 1),
+        "gpu_infer_mb"   : round(gpu_infer_mb, 1),
+        "infer_total_s"  : latency["total_time_s"],
+        "infer_per_img_ms": latency["per_image_ms"],
+        "throughput_fps" : latency["throughput_fps"],
+    }
+
+    out_path = results_dir / f"{CATEGORY}_results.json"
+    out_path.write_text(json.dumps(category_result, indent=2))
+    print(f"  [saved → {out_path}]")
