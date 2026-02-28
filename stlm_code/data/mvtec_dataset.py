@@ -5,7 +5,7 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.data import Dataset
-from mobile_sam.utils.transforms import ResizeLongestSide
+from stlm_code.mobile_sam.utils.transforms import ResizeLongestSide
 from stlm_code.data.data_utils import perlin_noise
 import cv2
 

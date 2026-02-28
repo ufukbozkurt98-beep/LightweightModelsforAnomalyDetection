@@ -10,8 +10,8 @@ Ported from https://github.com/Qi5Lei/STLM with minimal changes.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mobile_sam import sam_model_registry
-from mobile_sam.modeling.tiny_vit_sam import TinyViT
+from stlm_code.mobile_sam import sam_model_registry
+from stlm_code.mobile_sam.modeling.tiny_vit_sam import TinyViT
 from stlm_code.mobile_sam_decoder.mask_decoder import MaskDecoderSTLM
 from stlm_code.model.model_utils import ASPP, BasicBlock, make_layer
 

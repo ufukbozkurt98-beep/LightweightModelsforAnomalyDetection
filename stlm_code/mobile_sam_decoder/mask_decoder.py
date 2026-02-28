@@ -8,7 +8,7 @@ from torch.nn import functional as F
 
 from typing import List, Tuple, Type
 
-from mobile_sam.modeling.common import LayerNorm2d
+from stlm_code.mobile_sam.modeling.common import LayerNorm2d
 
 
 class MaskDecoderSTLM(nn.Module):
