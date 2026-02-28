@@ -8,6 +8,9 @@ import argparse
 import os
 import warnings
 import torch
+
+# Reduce CUDA memory fragmentation (helps when reserved-but-unallocated memory is large)
+os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from stlm_code.constant import RESIZE_SHAPE, ALL_CATEGORY
@@ -68,7 +71,7 @@ def train(args, category, rotate_90=False, random_rotate=0):
 
     dataloader = DataLoader(
         dataset,
-        batch_size=2,
+        batch_size=1,
         shuffle=True,
         num_workers=args.num_workers,
         drop_last=True,
