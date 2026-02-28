@@ -32,12 +32,12 @@ def evaluate(args, category, twostream, segmentation_net):
 
         # w/o FA
         tlm_AUPRO = AUPRO().to(device)
-        tlm_AUROC = AUROC().to(device)
-        tlm_detect_AUROC = AUROC().to(device)
+        tlm_AUROC = AUROC(task="binary").to(device)
+        tlm_detect_AUROC = AUROC(task="binary").to(device)
         # with FA
         fa_AUPRO = AUPRO().to(device)
-        fa_AUROC = AUROC().to(device)
-        fa_detect_AUROC = AUROC().to(device)
+        fa_AUROC = AUROC(task="binary").to(device)
+        fa_detect_AUROC = AUROC(task="binary").to(device)
 
         for _, sample_batched in enumerate(dataloader):
             img = sample_batched["img"].to(device)
