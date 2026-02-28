@@ -71,7 +71,7 @@ def train(args, category, rotate_90=False, random_rotate=0):
 
     dataloader = DataLoader(
         dataset,
-        batch_size=1,
+        batch_size=2,
         shuffle=True,
         num_workers=args.num_workers,
         drop_last=True,
