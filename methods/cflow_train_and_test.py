@@ -8,7 +8,11 @@ from utils.eval_metrics_cflow import (
     pixel_level_auroc,
     aupro,
 )
-from utils.benchmark import run_all_benchmarks, print_benchmark_results, measure_inference_latency, print_inference_latency
+from utils.model_benchmark import (
+    run_all_benchmarks, print_benchmark_results,
+    reset_gpu_peak, measure_gpu_memory_mb,
+    measure_inference_latency,
+)
 
 
 def train_and_test_cflow(
@@ -29,6 +33,8 @@ def train_and_test_cflow(
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    dev = torch.device(device)
 
     # Build extractor
     extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
@@ -63,12 +69,15 @@ def train_and_test_cflow(
         combined = (img + pix) / 2
         return combined, img, pix
 
-    # Train with evaluation every meta-epoch for best-epoch selection
+    # Train with GPU memory tracking
+    reset_gpu_peak(dev)
     cflow.fit(train_loader, eval_fn=_eval_fn, eval_every=1)
+    gpu_train_mb = measure_gpu_memory_mb(dev)
 
-    # Predict with inference latency measurement (uses best model if eval_fn was active)
-    inference_bench, scores, maps = measure_inference_latency(cflow.predict, test_loader, device=device)
-    print_inference_latency(inference_bench, device=device)
+    # Predict with inference latency measurement
+    reset_gpu_peak(dev)
+    inference_bench, (scores, maps) = measure_inference_latency(cflow.predict, test_loader, device=device)
+    gpu_infer_mb = measure_gpu_memory_mb(dev)
 
     # Results
     img_auc = image_level_auroc(y_img, scores)
@@ -81,9 +90,21 @@ def train_and_test_cflow(
         "aupro_0.3": float(pro),
         "backbone_benchmark": backbone_bench,
         "inference_benchmark": inference_bench,
+        "gpu_train_mb": round(gpu_train_mb, 1),
+        "gpu_infer_mb": round(gpu_infer_mb, 1),
     }
-    print(f"Image-level AUROC%: {metrics['image_auroc'] * 100:.2f}")
-    print(f"Pixel-level AUROC%: {metrics['pixel_auroc'] * 100:.2f}")
-    print(f"PRO (AUPRO@0.3)%: {metrics['aupro_0.3'] * 100:.2f}")
+
+    print(f"\n{'='*55}")
+    print(f"  CFLOW BENCHMARK: {backbone_name}")
+    print(f"{'='*55}")
+    print(f"  Image AUROC  : {metrics['image_auroc'] * 100:.2f}%")
+    print(f"  Pixel AUROC  : {metrics['pixel_auroc'] * 100:.2f}%")
+    print(f"  PRO          : {metrics['aupro_0.3'] * 100:.2f}%")
+    print(f"  GPU (train)  : {gpu_train_mb:.0f} MB")
+    print(f"  GPU (infer)  : {gpu_infer_mb:.0f} MB")
+    print(f"  Infer total  : {inference_bench['total_time_s']:.3f} s")
+    print(f"  Infer/image  : {inference_bench['per_image_ms']:.2f} ms")
+    print(f"  Throughput   : {inference_bench['throughput_fps']:.1f} FPS")
+    print(f"{'='*55}\n")
 
     return scores, maps, metrics
