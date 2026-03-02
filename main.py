@@ -118,6 +118,7 @@ def main():
             sub_epochs=8,
             input_size=IMAGE_INPUT_SIZE,
         )
+
     elif METHOD.lower() == "fastflow":
         scores, maps, metrics = train_and_test_fastflow(
             train_loader=train_loader,
