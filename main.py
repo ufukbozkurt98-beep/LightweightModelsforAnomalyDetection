@@ -125,7 +125,7 @@ def main():
             backbone_name=BACKBONE_KEY,
             device=device,
             flow_steps=8,
-            conv3x3_only=False,
+            conv3x3_only=True,
             hidden_ratio=1.5,
             clamp=2.0,
             lr=1e-3,
