@@ -84,6 +84,7 @@ def main():
             dtd_path=str(DTD_ROOT / "images") + "/",
             mobile_sam_path="./weights/mobile_sam.pt",
             sam_vit_h_path="./weights/sam_vit_h_4b8939.pth",
+            backbone_key=BACKBONE_KEY,
         )
         return
 

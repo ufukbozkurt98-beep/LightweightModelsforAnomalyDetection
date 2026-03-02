@@ -12,7 +12,8 @@ from stlm_code.trainSTLM import train
 def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/images/",
              mobile_sam_path="./weights/mobile_sam.pt",
              sam_vit_h_path="./weights/sam_vit_h_4b8939.pth",
-             gpu_id=0, num_workers=8, steps=200, eval_per_steps=5):
+             gpu_id=0, num_workers=8, steps=200, eval_per_steps=5,
+             backbone_key=None):
     """Run STLM training and evaluation for a single category.
 
     Args:
@@ -25,6 +26,7 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
         num_workers: DataLoader workers
         steps: Training epochs
         eval_per_steps: Evaluate every N epochs
+        backbone_key: None/"tinyvit" for original TinyViT, or backbone key for custom encoder
 
     Returns:
         dict with best metrics
@@ -68,14 +70,15 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
     print(f"\n=== STLM Training: {category} ===")
     print(f"  rotate_90={rotate_90}, random_rotate={random_rotate}")
     print(f"  steps={steps}, eval_per_steps={eval_per_steps}")
+    enc_name = backbone_key if backbone_key and backbone_key.lower() != "tinyvit" else "TinyViT"
     print(f"  teacher: SAM ViT-H ({sam_vit_h_path})")
-    print(f"  student: MobileSAM TinyViT ({mobile_sam_path})")
+    print(f"  student encoder: {enc_name}")
 
     if torch.cuda.is_available():
         with torch.cuda.device(gpu_id):
-            metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate)
+            metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
     else:
         print("  WARNING: No CUDA GPU found. Running on CPU (will be very slow).")
-        metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate)
+        metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
 
     return metrics

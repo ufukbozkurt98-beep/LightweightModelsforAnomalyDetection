@@ -23,16 +23,17 @@ from stlm_code.model.model_utils import l2_norm
 warnings.filterwarnings("ignore")
 
 
-def train(args, category, rotate_90=False, random_rotate=0):
+def train(args, category, rotate_90=False, random_rotate=0, backbone_key=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Using device: {device}")
 
-    # Initialize student (two-stream TinyViT)
-    print("  Loading student model (MobileSAM TinyViT)...")
+    # Initialize student (two-stream encoder)
+    enc_name = backbone_key if backbone_key and backbone_key.lower() != "tinyvit" else "TinyViT"
+    print(f"  Loading student model (encoder: {enc_name})...")
     sam_checkpoint = args.mobile_sam_path
     model_type = "vit_t"
     sam_mode = "train"
-    twostream = Batch_SamE(sam_checkpoint, model_type, sam_mode, device)
+    twostream = Batch_SamE(sam_checkpoint, model_type, sam_mode, device, backbone_key=backbone_key)
     print("  Student model loaded.")
 
     # Initialize teacher (SAM ViT-H, frozen)

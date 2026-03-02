@@ -12,8 +12,84 @@ import torch.nn as nn
 import torch.nn.functional as F
 from stlm_code.mobile_sam import sam_model_registry
 from stlm_code.mobile_sam.modeling.tiny_vit_sam import TinyViT
+from stlm_code.mobile_sam.modeling.common import LayerNorm2d
 from stlm_code.mobile_sam_decoder.mask_decoder import MaskDecoderSTLM
 from stlm_code.model.model_utils import ASPP, BasicBlock, make_layer
+
+
+class BackboneEncoderAdapter(nn.Module):
+    """Wraps a MultiScaleFeatureExtractor to produce (B, 256, 64, 64) output,
+    matching TinyViT's interface for use as encoderT/encoderS in Batch_SamE.
+
+    Uses the deepest feature level (l3) from the backbone, projects it to 256
+    channels via a SAM-style neck, and interpolates to 64x64 if needed.
+    """
+
+    img_size = 1024  # Required by Sam.preprocess() / Sam.postprocess_masks()
+
+    def __init__(self, backbone_key: str, pretrained: bool = True):
+        super().__init__()
+        from utils.feature_extractor import build_extractor
+
+        self.extractor = build_extractor(backbone_key, pretrained=pretrained)
+
+        # Get l3 channel count from the backbone
+        channels = self.extractor.feature_channels
+        c_in = channels["l3"]
+
+        # SAM-style neck: project from backbone channels to 256
+        self.neck = nn.Sequential(
+            nn.Conv2d(c_in, 256, kernel_size=1, bias=False),
+            LayerNorm2d(256),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False),
+            LayerNorm2d(256),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: (B, 3, 1024, 1024) preprocessed image
+        Returns:
+            (B, 256, 64, 64) feature embeddings
+        """
+        features = self.extractor(x)
+        out = features["l3"]  # (B, C_backbone, H', W')
+        out = self.neck(out)  # (B, 256, H', W')
+
+        # Ensure exactly 64x64 spatial size
+        if out.shape[2] != 64 or out.shape[3] != 64:
+            out = F.interpolate(out, size=(64, 64), mode="bilinear", align_corners=False)
+
+        return out
+
+
+def _build_encoder(backbone_key, device):
+    """Build student encoder: TinyViT (default) or custom backbone via adapter.
+
+    Args:
+        backbone_key: None or "tinyvit" for original TinyViT,
+                      otherwise a key from LIGHTWEIGHT_BACKBONES.
+        device: torch device
+    Returns:
+        nn.Module that maps (B, 3, 1024, 1024) -> (B, 256, 64, 64)
+    """
+    if backbone_key is None or backbone_key.lower() == "tinyvit":
+        return TinyViT(
+            img_size=1024, in_chans=3, num_classes=1000,
+            embed_dims=[64, 128, 160, 320],
+            depths=[2, 2, 6, 2],
+            num_heads=[2, 4, 5, 10],
+            window_sizes=[7, 7, 14, 7],
+            mlp_ratio=4.,
+            drop_rate=0.,
+            drop_path_rate=0.0,
+            use_checkpoint=True,
+            mbconv_expand_ratio=4.0,
+            local_conv_size=3,
+            layer_lr_decay=0.8,
+        ).to(device)
+    else:
+        return BackboneEncoderAdapter(backbone_key, pretrained=True).to(device)
 
 
 def _replace_mask_decoder(model):
@@ -100,12 +176,15 @@ class Batch_Sam(nn.Module):
 
 class Batch_SamE(nn.Module):
     """Two-stream lightweight student model.
-    - encoderT: plain student stream (TinyViT)
-    - encoderS: denoising student stream (TinyViT)
+    - encoderT: plain student stream
+    - encoderS: denoising student stream
     - Shared MaskDecoder from MobileSAM
+
+    backbone_key: None or "tinyvit" for original TinyViT,
+                  or any key from LIGHTWEIGHT_BACKBONES for custom backbone.
     """
 
-    def __init__(self, sam_checkpoint, model_type, mode, device):
+    def __init__(self, sam_checkpoint, model_type, mode, device, backbone_key=None):
         super().__init__()
         self.sam_checkpoint = sam_checkpoint
         self.model_type = model_type
@@ -114,34 +193,8 @@ class Batch_SamE(nn.Module):
         self.model = sam_model_registry[self.model_type](checkpoint=self.sam_checkpoint)
         self.model = _replace_mask_decoder(self.model)
         self.model = self.model.to(device=self.device)
-        self.encoderT = TinyViT(
-            img_size=1024, in_chans=3, num_classes=1000,
-            embed_dims=[64, 128, 160, 320],
-            depths=[2, 2, 6, 2],
-            num_heads=[2, 4, 5, 10],
-            window_sizes=[7, 7, 14, 7],
-            mlp_ratio=4.,
-            drop_rate=0.,
-            drop_path_rate=0.0,
-            use_checkpoint=True,
-            mbconv_expand_ratio=4.0,
-            local_conv_size=3,
-            layer_lr_decay=0.8,
-        ).to(device=self.device)
-        self.encoderS = TinyViT(
-            img_size=1024, in_chans=3, num_classes=1000,
-            embed_dims=[64, 128, 160, 320],
-            depths=[2, 2, 6, 2],
-            num_heads=[2, 4, 5, 10],
-            window_sizes=[7, 7, 14, 7],
-            mlp_ratio=4.,
-            drop_rate=0.,
-            drop_path_rate=0.0,
-            use_checkpoint=True,
-            mbconv_expand_ratio=4.0,
-            local_conv_size=3,
-            layer_lr_decay=0.8,
-        ).to(device=self.device)
+        self.encoderT = _build_encoder(backbone_key, self.device)
+        self.encoderS = _build_encoder(backbone_key, self.device)
         if self.mode == "train":
             self.model.train()
             self.encoderT.train()

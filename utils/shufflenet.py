@@ -283,6 +283,202 @@ class ShuffleNet(nn.Module):
             return feats["l3"]
 
 
+def _map_megvii_state_dict(src_state: dict, model: ShuffleNet) -> dict:
+    """
+    Map state_dict keys from the official Megvii ShuffleNet-Series checkpoint
+    to our implementation.
+
+    Megvii (megvii-model/ShuffleNet-Series) uses:
+      - first_conv.{i}                    -> conv1.{i}
+      - features.{flat_idx}.branch_main_1.0  -> stageN.{local}.gconv1  (1x1 group conv)
+      - features.{flat_idx}.branch_main_1.1  -> stageN.{local}.bn1
+      - features.{flat_idx}.branch_main_1.3  -> stageN.{local}.dwconv  (3x3 depthwise)
+      - features.{flat_idx}.branch_main_1.4  -> stageN.{local}.bn2
+      - features.{flat_idx}.branch_main_2.0  -> stageN.{local}.gconv2  (1x1 group conv)
+      - features.{flat_idx}.branch_main_2.1  -> stageN.{local}.bn3
+      - classifier.*                         -> skipped (no classifier needed)
+
+    Megvii stores all blocks in one flat 'features' Sequential [0..15].
+    We split them into stage2 [0..3], stage3 [0..7], stage4 [0..3]
+    using STAGE_REPEATS = [4, 8, 4].
+    """
+    import re
+
+    mapped = {}
+    dst_keys = set(model.state_dict().keys())
+
+    # Build flat-index to (stage_name, local_index) mapping
+    # stage_repeats = [4, 8, 4] -> flat 0-3 = stage2, 4-11 = stage3, 12-15 = stage4
+    stage_repeats = model.STAGE_REPEATS
+    flat_to_stage = {}
+    flat_idx = 0
+    for stage_offset, repeats in enumerate(stage_repeats):
+        stage_name = f"stage{stage_offset + 2}"
+        for local_idx in range(repeats):
+            flat_to_stage[flat_idx] = (stage_name, local_idx)
+            flat_idx += 1
+
+    # Layer index mapping within each block:
+    # branch_main_1: [0]=gconv1, [1]=bn1, [2]=ReLU(no params), [3]=dwconv, [4]=bn2
+    # branch_main_2: [0]=gconv2, [1]=bn3
+    block_layer_map = {
+        "branch_main_1.0": "gconv1",
+        "branch_main_1.1": "bn1",
+        "branch_main_1.3": "dwconv",
+        "branch_main_1.4": "bn2",
+        "branch_main_2.0": "gconv2",
+        "branch_main_2.1": "bn3",
+    }
+
+    for src_key, value in src_state.items():
+        # Skip classifier
+        if src_key.startswith("classifier."):
+            continue
+
+        # first_conv.{i} -> conv1.{i}
+        if src_key.startswith("first_conv."):
+            dst_key = src_key.replace("first_conv.", "conv1.", 1)
+            if dst_key in dst_keys:
+                mapped[dst_key] = value
+            continue
+
+        # features.{flat_idx}.{block_layer}.{param}
+        m = re.match(r"features\.(\d+)\.(.*)", src_key)
+        if m:
+            fidx = int(m.group(1))
+            rest = m.group(2)
+
+            if fidx not in flat_to_stage:
+                continue
+
+            stage_name, local_idx = flat_to_stage[fidx]
+
+            # Map branch_main_X.Y to our layer name
+            for megvii_prefix, our_name in block_layer_map.items():
+                if rest.startswith(megvii_prefix):
+                    param_suffix = rest[len(megvii_prefix):]  # e.g. ".weight"
+                    dst_key = f"{stage_name}.{local_idx}.{our_name}{param_suffix}"
+                    if dst_key in dst_keys:
+                        mapped[dst_key] = value
+                    break
+            continue
+
+        # Any other key that directly matches (unlikely but safe)
+        if src_key in dst_keys:
+            mapped[src_key] = value
+
+    return mapped
+
+
+def _map_jaxony_state_dict(src_state: dict, model: ShuffleNet) -> dict:
+    """
+    Map state_dict keys from jaxony/ShuffleNet (or ericsun99/ShuffleNet-1g8)
+    checkpoint format to our implementation.
+
+    These third-party implementations use:
+      - conv1 (plain Conv2d, no BN)
+      - stageN.ShuffleUnit_StageN_I.g_conv_1x1_compress/depthwise_conv3x3/...
+      - Conv layers have bias=True (ours have bias=False, so biases are skipped)
+    """
+    import re
+
+    mapped = {}
+    dst_keys = set(model.state_dict().keys())
+
+    for src_key, value in src_state.items():
+        # Skip FC classifier
+        if src_key.startswith("fc."):
+            continue
+
+        # conv1: external has plain Conv2d, ours wraps in Sequential
+        if src_key == "conv1.weight":
+            dst_key = "conv1.0.weight"
+            if dst_key in dst_keys:
+                mapped[dst_key] = value
+            continue
+        if src_key == "conv1.bias":
+            continue
+
+        dst_key = src_key
+
+        m = re.match(
+            r"(stage\d+)\.ShuffleUnit_Stage\d+_(\d+)\.(.*)", src_key
+        )
+        if m:
+            stage, idx, rest = m.group(1), m.group(2), m.group(3)
+            rest = rest.replace("g_conv_1x1_compress.conv1x1.", "gconv1.")
+            rest = rest.replace("g_conv_1x1_compress.batch_norm.", "bn1.")
+            rest = rest.replace("depthwise_conv3x3.", "dwconv.")
+            rest = rest.replace("bn_after_depthwise.", "bn2.")
+            rest = rest.replace("g_conv_1x1_expand.conv1x1.", "gconv2.")
+            rest = rest.replace("g_conv_1x1_expand.batch_norm.", "bn3.")
+            dst_key = f"{stage}.{idx}.{rest}"
+
+        # Skip bias tensors from conv layers (ours uses bias=False)
+        if dst_key.endswith(".bias") and dst_key not in dst_keys:
+            continue
+
+        if dst_key in dst_keys:
+            mapped[dst_key] = value
+
+    return mapped
+
+
+def _detect_checkpoint_format(src_state: dict) -> str:
+    """Auto-detect which checkpoint format the state_dict uses."""
+    keys = set(src_state.keys())
+    if any(k.startswith("first_conv.") for k in keys):
+        return "megvii"
+    if any("ShuffleUnit_Stage" in k for k in keys):
+        return "jaxony"
+    if any(k.startswith("features.") for k in keys):
+        return "megvii"
+    return "unknown"
+
+
+def load_pretrained_shufflenet(model: ShuffleNet, checkpoint_path: str) -> None:
+    """
+    Load pretrained weights into our ShuffleNet model.
+    Auto-detects the checkpoint format (official Megvii or third-party jaxony/ericsun99).
+
+    Supported checkpoints:
+      - Official Megvii (megvii-model/ShuffleNet-Series), MIT license
+        Download: https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo
+      - jaxony/ShuffleNet g=3 (third-party, MIT license)
+      - ericsun99/ShuffleNet-1g8-Pytorch g=8 (third-party, BSD-2-Clause)
+    """
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+    # Checkpoints may wrap the state_dict under a 'state_dict' key
+    if "state_dict" in checkpoint:
+        src_state = checkpoint["state_dict"]
+    else:
+        src_state = checkpoint
+
+    # Auto-detect format and apply the right mapping
+    fmt = _detect_checkpoint_format(src_state)
+    if fmt == "megvii":
+        mapped = _map_megvii_state_dict(src_state, model)
+    elif fmt == "jaxony":
+        mapped = _map_jaxony_state_dict(src_state, model)
+    else:
+        raise ValueError(
+            f"Could not detect checkpoint format. "
+            f"Expected keys starting with 'first_conv.' (Megvii) "
+            f"or containing 'ShuffleUnit_Stage' (jaxony). "
+            f"Got keys: {list(src_state.keys())[:5]}..."
+        )
+
+    # Load with strict=False: any unmatched keys stay at default init
+    missing, unexpected = model.load_state_dict(mapped, strict=False)
+
+    loaded_count = len(mapped)
+    total_count = len(model.state_dict())
+    print(f"  [{fmt} format] Loaded {loaded_count}/{total_count} pretrained parameters")
+    if missing:
+        print(f"  Not loaded (using default init): {missing}")
+
+
 def shufflenet_g1(scale: float = 1.0, num_classes: int = 1000) -> ShuffleNet:
     """ShuffleNet with g=1"""
     return ShuffleNet(groups=1, num_classes=num_classes, scale=scale)

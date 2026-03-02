@@ -106,12 +106,13 @@ class _TimmFeaturesOnly(nn.Module):
         # Get feature info from timm model
         fi = getattr(self.backbone, "feature_info", None)
 
-        # feature_info contains metadata about each layer
+        # feature_info.channels() returns channel counts matching the selected out_indices,
+        # NOT all feature levels. This is important because iterating `for f in fi`
+        # yields ALL feature levels regardless of out_indices.
         if fi is not None:
             try:
-                # Extract channel counts for each layer
-                chans = [f.get("num_chs") for f in fi]
-                self.feature_channels = {f"l{i+1}": int(c) for i, c in enumerate(chans) if c is not None}
+                chans = fi.channels()  # only selected out_indices
+                self.feature_channels = {f"l{i+1}": int(c) for i, c in enumerate(chans)}
             except Exception:
                 pass
 
@@ -127,22 +128,29 @@ class _TimmFeaturesOnly(nn.Module):
 
 class _ShuffleNetFeaturesOnly(nn.Module):
     """
-    Extract multi-scale features using ShuffleNet implementation
-    return {"l1", "l2", "l3"} from stage2, stage3, stage4
-    No pretrained weights are available
+    Extract multi-scale features using ShuffleNet implementation.
+    Returns {"l1", "l2", "l3"} from stage2, stage3, stage4.
+
+    Pretrained ImageNet weights (official, from Megvii/Face++ paper authors, MIT license)
+    are loaded automatically if the checkpoint file exists in weights/ directory.
+
+    Download from: https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo
+    Source: https://github.com/megvii-model/ShuffleNet-Series (MIT license)
+
+    Also supports third-party checkpoints (jaxony, ericsun99) — format is auto-detected.
     """
 
-    # Map of model name
-    # Three configurations from the original ShuffleNet paper
+    # Map of model name -> (groups, scale, weight filename or None)
     _CONFIGS = {
-        "shufflenet_g1":        (1, 1.0),
-        "shufflenet_g3":        (3, 1.0),
-        "shufflenet_g8":        (8, 1.0),
+        "shufflenet_g1":  (1, 1.0, None),  # no pretrained weights available
+        "shufflenet_g3":  (3, 1.0, "shufflenet_g3.pth.tar"),
+        "shufflenet_g8":  (8, 1.0, "shufflenet_g8.pth.tar"),
     }
 
     def __init__(self, model_name: str) -> None:
         super().__init__()
-        from utils.shufflenet import ShuffleNet
+        from pathlib import Path
+        from utils.shufflenet import ShuffleNet, load_pretrained_shufflenet
 
         if model_name not in self._CONFIGS:
             raise ValueError(
@@ -150,10 +158,23 @@ class _ShuffleNetFeaturesOnly(nn.Module):
                 f"Available: {list(self._CONFIGS.keys())}"
             )
 
-        groups, scale = self._CONFIGS[model_name]
+        groups, scale, weight_file = self._CONFIGS[model_name]
 
         # num_classes=0 disables the classifier head since we only need features
         self.backbone = ShuffleNet(groups=groups, num_classes=0, scale=scale)
+
+        # Load pretrained weights if checkpoint file exists
+        if weight_file is not None:
+            weight_path = Path("weights") / weight_file
+            if weight_path.exists():
+                print(f"  Loading pretrained ShuffleNet weights from {weight_path}")
+                load_pretrained_shufflenet(self.backbone, str(weight_path))
+            else:
+                print(f"  WARNING: Pretrained weights not found at {weight_path}")
+                print(f"  ShuffleNet will use random initialization.")
+                print(f"  To use pretrained weights, download from official Megvii repo:")
+                print(f"    https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo")
+                print(f"  and save the 1.0x g={groups} checkpoint as: {weight_path}")
 
         # Store feature channel counts for each level
         self.feature_channels = {
