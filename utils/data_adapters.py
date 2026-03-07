@@ -10,6 +10,10 @@ class TupleLoader:
     def __init__(self, loader):
         self.loader = loader  # Store the original DataLoader
 
+    @property
+    def dataset(self):
+        return self.loader.dataset  # Expose the underlying dataset
+
     def __len__(self):
         return len(self.loader)  # Return the number of batches in the original loader.
 

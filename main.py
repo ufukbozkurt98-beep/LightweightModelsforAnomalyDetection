@@ -74,8 +74,12 @@ def run_single_category(category, data_root, device, backbone_bench=None):
         return metrics
 
     # Build data loaders
+    # CFlow-AD original uses RandomRotation(5) and drop_last=True for training
+    is_cflow = METHOD.lower() == "cflow"
     train_loader = make_loader_mvtec_ad(Path(data_root), category, "train", split_json,
-                                        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
+                                        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE,
+                                        rotate_deg=5.0 if is_cflow else 0.0,
+                                        drop_last_train=True if is_cflow else False)
     if METHOD.lower() not in ("cflow", "fastflow"):
         val_loader = make_loader_mvtec_ad(Path(data_root), category, "val", split_json,
                                           input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)

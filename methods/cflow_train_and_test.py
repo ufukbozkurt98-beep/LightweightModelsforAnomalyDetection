@@ -84,10 +84,14 @@ def train_and_test_cflow(
     cflow.fit(train_loader, eval_fn=_eval_fn, eval_every=1)
     gpu_train_mb = measure_gpu_memory_mb(dev)
 
-    # Predict with inference latency measurement
+    # Predict with inference latency measurement (end-to-end pipeline)
     reset_gpu_peak(dev)
     inference_bench, (scores, maps) = measure_inference_latency(cflow.predict, test_loader, device=device)
     gpu_infer_mb = measure_gpu_memory_mb(dev)
+
+    # Measure FPS the same way as the original CFlow-AD paper (Table 6)
+    # Warm-up + encoder-only + encoder+decoder, with cuda.synchronize()
+    fps_bench = cflow.measure_fps(test_loader)
 
     # Results
     img_auc = image_level_auroc(y_img, scores)
@@ -101,6 +105,7 @@ def train_and_test_cflow(
         "best_metric": best_metric,
         "backbone_benchmark": backbone_bench,
         "inference_benchmark": inference_bench,
+        "fps_benchmark": fps_bench,
         "gpu_train_mb": round(gpu_train_mb, 1),
         "gpu_infer_mb": round(gpu_infer_mb, 1),
     }
@@ -115,7 +120,9 @@ def train_and_test_cflow(
     print(f"  GPU (infer)  : {gpu_infer_mb:.0f} MB")
     print(f"  Infer total  : {inference_bench['total_time_s']:.3f} s")
     print(f"  Infer/image  : {inference_bench['per_image_ms']:.2f} ms")
-    print(f"  Throughput   : {inference_bench['throughput_fps']:.1f} FPS")
+    print(f"  Pipeline FPS : {inference_bench['throughput_fps']:.1f} FPS")
+    print(f"  Model FPS    : {fps_bench['fps_all']:.1f} FPS  (encoder+decoder, same as paper Table 6)")
+    print(f"  Encoder FPS  : {fps_bench['fps_encoder']:.1f} FPS  (encoder only)")
     print(f"{'='*55}\n")
 
     return scores, maps, metrics
