@@ -29,6 +29,7 @@ def train_and_test_fastflow(
     meta_epochs: int = 50,
     weight_decay: float = 1e-5,
     input_size: int = 256,
+    backbone_bench: dict | None = None,
 ):
     """
     Train and test FastFlow, return scores, anomaly maps and metrics.
@@ -42,10 +43,11 @@ def train_and_test_fastflow(
     # Build extractor
     extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
 
-    # Benchmark backbone
-    dummy_input = torch.randn(1, 3, input_size, input_size)
-    backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
-    print_benchmark_results(backbone_bench, label=f"Backbone ({backbone_name})")
+    # Benchmark backbone (skip if pre-computed)
+    if backbone_bench is None:
+        dummy_input = torch.randn(1, 3, input_size, input_size)
+        backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
+        print_benchmark_results(backbone_bench, label=f"Backbone ({backbone_name})")
 
     # Build FastFlow
     fastflow = FastFlowMethod(

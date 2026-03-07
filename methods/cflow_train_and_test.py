@@ -29,6 +29,8 @@ def train_and_test_cflow(
     meta_epochs: int = 25,
     sub_epochs: int = 8,
     input_size: int = 256,
+    best_metric: str = "pixel",
+    backbone_bench: dict | None = None,
 ):
 
     if device is None:
@@ -39,10 +41,11 @@ def train_and_test_cflow(
     # Build extractor
     extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
 
-    # Benchmark backbone
-    dummy_input = torch.randn(1, 3, input_size, input_size)
-    backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
-    print_benchmark_results(backbone_bench, label=f"Backbone ({backbone_name})")
+    # Benchmark backbone (skip if pre-computed)
+    if backbone_bench is None:
+        dummy_input = torch.randn(1, 3, input_size, input_size)
+        backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
+        print_benchmark_results(backbone_bench, label=f"Backbone ({backbone_name})")
 
     # Build cflow
     cflow = CFlowMethod(
@@ -61,13 +64,20 @@ def train_and_test_cflow(
     # Collect ground truth early so eval_fn can use it during training
     y_img, y_pix = collect_gt_from_loader(test_loader)
 
-    # Build eval callback: combined (image + pixel) AUROC for best-epoch selection
+    # Build eval callback for best-epoch selection
+    # "pixel"    = original CFlow paper (pixel AUROC only)
+    # "combined" = ours (image + pixel AUROC) / 2
+    print(f"  Best-epoch metric: {best_metric}")
+
     def _eval_fn():
         scores, maps = cflow.predict(test_loader)
         pix = pixel_level_auroc(y_pix, maps)
         img = image_level_auroc(y_img, scores)
-        combined = (img + pix) / 2
-        return combined, img, pix
+        if best_metric == "pixel":
+            return pix, img, pix
+        else:
+            combined = (img + pix) / 2
+            return combined, img, pix
 
     # Train with GPU memory tracking
     reset_gpu_peak(dev)
@@ -88,6 +98,7 @@ def train_and_test_cflow(
         "image_auroc": float(img_auc),
         "pixel_auroc": float(pix_auc),
         "aupro_0.3": float(pro),
+        "best_metric": best_metric,
         "backbone_benchmark": backbone_bench,
         "inference_benchmark": inference_bench,
         "gpu_train_mb": round(gpu_train_mb, 1),
