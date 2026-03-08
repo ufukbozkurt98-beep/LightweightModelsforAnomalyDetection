@@ -31,6 +31,7 @@ def train_and_test_cflow(
     input_size: int = 256,
     best_metric: str = "pixel",
     backbone_bench: dict | None = None,
+    out_indices: tuple | None = None,
 ):
 
     if device is None:
@@ -39,7 +40,7 @@ def train_and_test_cflow(
     dev = torch.device(device)
 
     # Build extractor
-    extractor = build_extractor(backbone_name, pretrained=True, device=device).eval()
+    extractor = build_extractor(backbone_name, pretrained=True, device=device, out_indices=out_indices).eval()
 
     # Benchmark backbone (skip if pre-computed)
     if backbone_bench is None:

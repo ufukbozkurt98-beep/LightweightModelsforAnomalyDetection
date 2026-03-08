@@ -30,7 +30,7 @@ ALL_MVTEC_CATEGORIES = [
 ]
 
 
-def run_single_category(category, data_root, device, backbone_bench=None):
+def run_single_category(category, data_root, device, backbone_bench=None, cflow_out_indices=None):
     """Run training and evaluation for a single MVTec AD category."""
     split_json = REPORTS_DIR / f"mvtec_{category}_split.json"
 
@@ -108,6 +108,7 @@ def run_single_category(category, data_root, device, backbone_bench=None):
             input_size=IMAGE_INPUT_SIZE,
             best_metric="pixel",  # "pixel" = original CFlow paper, "combined" = (img+pix)/2
             backbone_bench=backbone_bench,
+            out_indices=cflow_out_indices,
         )
         return metrics
     elif METHOD.lower() == "fastflow":
@@ -178,10 +179,14 @@ def main():
     else:
         categories = [CATEGORY]
 
+    # CFlow-AD original paper uses deeper feature layers: features[-11,-5,-2]
+    # which corresponds to out_indices=(2,3,4) in timm → 32×32, 16×16, 8×8
+    cflow_out_indices = (2, 3, 4) if METHOD.lower() == "cflow" else None
+
     # Run backbone benchmark once before the category loop
     backbone_bench = None
     if METHOD.lower() in ("cflow", "fastflow"):
-        extractor = build_extractor(BACKBONE_KEY, pretrained=True, device=device).eval()
+        extractor = build_extractor(BACKBONE_KEY, pretrained=True, device=device, out_indices=cflow_out_indices).eval()
         dummy_input = torch.randn(1, 3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE)
         backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
         print_benchmark_results(backbone_bench, label=f"Backbone ({BACKBONE_KEY})")
@@ -194,7 +199,7 @@ def main():
         print(f"  [{i+1}/{len(categories)}] Category: {cat}")
         print(f"{'#'*80}\n")
 
-        metrics = run_single_category(cat, data_root, device, backbone_bench=backbone_bench)
+        metrics = run_single_category(cat, data_root, device, backbone_bench=backbone_bench, cflow_out_indices=cflow_out_indices)
         all_results[cat] = metrics
 
     # Print summary table if multiple categories were run

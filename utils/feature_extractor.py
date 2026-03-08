@@ -227,10 +227,17 @@ def build_extractor(
     *,
     pretrained: bool = True,
     device: Optional[torch.device] = None,
+    out_indices: Optional[Tuple[int, int, int]] = None,
 ) -> MultiScaleFeatureExtractor:
 
     if backbone_key not in LIGHTWEIGHT_BACKBONES:
         raise KeyError(
             f"Unknown backbone '{backbone_key}'. Available: {sorted(LIGHTWEIGHT_BACKBONES.keys())}"
         )
-    return MultiScaleFeatureExtractor(LIGHTWEIGHT_BACKBONES[backbone_key], pretrained=pretrained, device=device)
+    spec = LIGHTWEIGHT_BACKBONES[backbone_key]
+    # Allow method-specific override of out_indices
+    # e.g. CFlow-AD original uses (2,3,4) to match paper's feature[-11,-5,-2] layers
+    if out_indices is not None and spec.source == "timm":
+        from dataclasses import replace
+        spec = replace(spec, out_indices=out_indices)
+    return MultiScaleFeatureExtractor(spec, pretrained=pretrained, device=device)
