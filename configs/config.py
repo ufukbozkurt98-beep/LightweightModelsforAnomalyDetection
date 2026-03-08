@@ -26,5 +26,6 @@ BACKBONE_KEY = "efficientnet_lite0"
 #BACKBONE_KEY = "mobileformer_294m"  # MobileFormer 294M FLOPs (11.4M params)
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
 METHOD = "cflow"
+
 #METHOD = "simplenet"
 #METHOD = "stlm"
