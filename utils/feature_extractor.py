@@ -53,6 +53,7 @@ class MultiScaleFeatureExtractor(nn.Module):
         *,
         pretrained: bool = True,
         device: Optional[torch.device] = None,
+        tap_offset: int = 0,
     ) -> None:
         super().__init__()
         self.spec = spec
@@ -64,7 +65,7 @@ class MultiScaleFeatureExtractor(nn.Module):
         elif spec.source == "custom_shufflenet":
             self._impl = _ShuffleNetFeaturesOnly(spec.name)
         elif spec.source == "custom_mobileformer":
-            self._impl = _MobileFormerFeaturesOnly(spec.name)
+            self._impl = _MobileFormerFeaturesOnly(spec.name, tap_offset=tap_offset)
         else:
             raise ValueError(f"Unknown backbone source: {spec.source}")
 
@@ -199,7 +200,7 @@ class _MobileFormerFeaturesOnly(nn.Module):
         "mobileformer_52m",
     }
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, tap_offset: int = 0) -> None:
         super().__init__()
         from utils.mobileformer.mobile_former import _build_mobile_former
 
@@ -211,6 +212,8 @@ class _MobileFormerFeaturesOnly(nn.Module):
 
         # Always loads pretrained weights
         self.backbone = _build_mobile_former(model_name)
+        if tap_offset > 0:
+            self.backbone.set_tap_offset(tap_offset)
 
         # Store feature channel counts for each level
         self.feature_channels = {
@@ -235,9 +238,14 @@ def build_extractor(
             f"Unknown backbone '{backbone_key}'. Available: {sorted(LIGHTWEIGHT_BACKBONES.keys())}"
         )
     spec = LIGHTWEIGHT_BACKBONES[backbone_key]
+    tap_offset = 0
     # Allow method-specific override of out_indices
     # e.g. CFlow-AD original uses (2,3,4) to match paper's feature[-11,-5,-2] layers
-    if out_indices is not None and spec.source == "timm":
-        from dataclasses import replace
-        spec = replace(spec, out_indices=out_indices)
-    return MultiScaleFeatureExtractor(spec, pretrained=pretrained, device=device)
+    if out_indices is not None:
+        if spec.source == "timm":
+            from dataclasses import replace
+            spec = replace(spec, out_indices=out_indices)
+        elif spec.source == "custom_mobileformer":
+            # out_indices=(2,3,4) means "use deeper features" → tap_offset=1
+            tap_offset = out_indices[0] - 1  # (2,3,4) → offset 1; (1,2,3) → offset 0
+    return MultiScaleFeatureExtractor(spec, pretrained=pretrained, device=device, tap_offset=tap_offset)

@@ -296,9 +296,26 @@ class MobileFormer(nn.Module):
 
         self.features = nn.ModuleList(layers)
 
-        # First 3 stride-2 blocks give us l1, l2, l3 feature maps
-        self._tap_indices: List[int] = self._stride2_flat_indices[:3]
-        self.stage_out_channels: List[int] = self._stage_out_channels_list[:3]
+        # Select 3 consecutive stride-2 blocks for l1, l2, l3 feature maps
+        # tap_offset=0 (default): first 3 stride-2 blocks → 64×64, 32×32, 16×16
+        # tap_offset=1: stride-2 blocks [1:4] → 32×32, 16×16, 8×8 (matches CFlow-AD)
+        self._tap_offset = 0
+        self._apply_tap_offset(self._tap_offset)
+
+    def set_tap_offset(self, offset: int):
+        """Shift which stride-2 blocks are used for feature extraction."""
+        self._tap_offset = offset
+        self._apply_tap_offset(offset)
+
+    def _apply_tap_offset(self, offset: int):
+        end = offset + 3
+        if end > len(self._stride2_flat_indices):
+            raise ValueError(
+                f"tap_offset={offset} requires {end} stride-2 blocks, "
+                f"but only {len(self._stride2_flat_indices)} available"
+            )
+        self._tap_indices: List[int] = self._stride2_flat_indices[offset:end]
+        self.stage_out_channels: List[int] = self._stage_out_channels_list[offset:end]
 
     def forward_features(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
