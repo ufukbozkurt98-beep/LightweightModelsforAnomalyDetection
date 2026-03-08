@@ -106,7 +106,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             meta_epochs=25,
             sub_epochs=8,
             input_size=IMAGE_INPUT_SIZE,
-            best_metric="pixel",  # "pixel" = original CFlow paper, "combined" = (img+pix)/2
+            best_metric="combined",  # "pixel" = original CFlow paper, "combined" = (img+pix)/2
             backbone_bench=backbone_bench,
             out_indices=cflow_out_indices,
         )
