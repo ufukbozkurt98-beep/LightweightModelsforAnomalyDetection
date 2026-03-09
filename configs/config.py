@@ -13,11 +13,11 @@ IMAGE_INPUT_SIZE = 256
 SPLIT_JSON = REPORTS_DIR / f"mvtec_{CATEGORY}_split.json" # path object pointing to split file of the category
 NUM_WORKERS = 2
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
-#BACKBONE_KEY = "mobilenetv3_large"
-BACKBONE_KEY = "efficientnet_lite1"
+BACKBONE_KEY = "mobilenetv3_large"
+#BACKBONE_KEY = "efficientnet_lite1"
 #BACKBONE_KEY = "shufflenetv2_x1_0"
-#METHOD = "glass"
-METHOD = "simplenet"
+METHOD = "glass"
+#METHOD = "simplenet"
 
 # Set to True to run all 15 MVTec-AD categories in a loop.
 # When True, CATEGORY above is ignored.
