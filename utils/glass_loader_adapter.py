@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Iterator, List, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import glob
 import os
@@ -26,6 +26,48 @@ def _collect_dtd_paths(dtd_images_root: str) -> List[str]:
             f"Make sure DTD is extracted correctly."
         )
     return paths
+
+
+def _load_fg_mask(image_path: str, category: str, H: int, W: int) -> torch.Tensor:
+    """
+    Load the foreground binary mask for a training image, matching the original
+    GLASS logic from datasets/mvtec.py:
+        fgmask_path = image_path.split(classname)[0]
+                      + 'fg_mask/' + classname + '/' + filename
+
+    For example:
+        image_path  : .../MVTec-AD/bottle/train/good/000.png
+        fgmask_path : .../MVTec-AD/fg_mask/bottle/000.png
+
+    If the fg_mask file does not exist (e.g. the dataset was not downloaded, or
+    the category doesn't have one), falls back to all-ones (whole image), which
+    is the same behaviour as fg=0 in the original code.
+
+    Returns a float tensor of shape [H, W] with values 0.0 or 1.0.
+    """
+    try:
+        # Replicate: image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + filename
+        parts = image_path.split(category)
+        if len(parts) < 2:
+            return torch.ones(H, W)  # fallback: category not found in path
+        base  = parts[0]                                # e.g. .../MVTec-AD/
+        fname = os.path.basename(image_path)            # e.g. 000.png
+        fg_path = os.path.join(base, "fg_mask", category, fname)
+
+        if not os.path.isfile(fg_path):
+            return torch.ones(H, W)  # fg_mask not downloaded → whole-image fallback
+
+        fg_pil = PIL.Image.open(fg_path).convert("L")
+        # Resize to match our image resolution (we use 256, paper uses 288)
+        fg_pil = fg_pil.resize((W, H), PIL.Image.NEAREST)
+        fg_np  = np.array(fg_pil, dtype=np.float32) / 255.0
+        # torch.ceil replicates the original: torch.ceil(transform_mask(mask_fg)[0])
+        # which binarises any non-zero pixel to 1
+        return torch.from_numpy(fg_np).ceil()           # [H, W], values 0.0 or 1.0
+
+    except Exception:
+        return torch.ones(H, W)  # any read error → safe fallback
+
 
 #Picks 3 random augmentations from a list of 9 (color jitter, flips, grayscale, autocontrast, equalize, affine)
 #Replicates original GLASS's rand_augmenter() method from datasets/mvtec.py
@@ -59,10 +101,17 @@ def _make_single_aug(img_tensor: torch.Tensor,
                      dtd_paths: List[str],
                      ph: int, pw: int,
                      H: int, W: int,
+                     image_path: str  = "",
+                     category:   str  = "",
                      beta_mean: float = 0.5,
-                     beta_std: float  = 0.1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                     beta_std:  float = 0.1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Produces one augmented image + masks for a single training image.
+
+    Now accepts image_path and category so it can load the per-image foreground
+    mask when the fg_mask folder is present (matching the original GLASS fg=1
+    behaviour from datasets/mvtec.py). Falls back to whole-image (fg=0) if the
+    mask file is not available.
 
     Returns:
         aug_tensor : [3, H, W]  – blended image, still ImageNet-normalised
@@ -75,12 +124,17 @@ def _make_single_aug(img_tensor: torch.Tensor,
     aug_tf    = _rand_augmenter(W)              # W == H == 256 in our setup which is input_size
     dtd_tensor = aug_tf(dtd_pil)               # [3, H, W], ImageNet-normalised
 
+    # --- load foreground mask (fg=1 in the original paper) ---
+    # If fg_mask files are present next to MVTec-AD, this constrains Perlin noise
+    # to the foreground object only, matching the paper's augmentation.
+    # If the files are absent, mask_fg stays all-ones (whole image, same as fg=0).
+    mask_fg = _load_fg_mask(image_path, category, H, W)   # [H, W], float 0/1
+
     # --- generating Perlin mask ---
     # perlin_mask expects (C, H, W) shape, feat_size = patch grid side
     # flag=1 returns (mask_s_np [ph,pw], mask_l_np [H,W])
     feat_size = ph                              # ph == pw in our square setup
     img_shape = (3, H, W)
-    mask_fg   = torch.ones(H, W)               # no foreground mask → whole image
     mask_s_np, mask_l_np = perlin_mask(img_shape, feat_size, 0, 6, mask_fg, flag=1)
 
     # converting to tensors
@@ -138,6 +192,7 @@ class GlassLoaderAdapter:
             patch_grid:  Tuple[int, int],
             is_train:    bool,
             dtd_root:    str  = "",          # path to dtd/images  (required for training)
+            category:    str  = "",          # MVTec-AD category name, used to locate fg_mask files
             image_key:   str  = "image",
             mask_key:    str  = "mask",
             label_key:   str  = "label",
@@ -154,6 +209,7 @@ class GlassLoaderAdapter:
         self.path_keys  = path_keys
         self.beta_mean  = beta_mean
         self.beta_std   = beta_std
+        self.category   = category  # stored so _make_single_aug can resolve fg_mask paths
 
         # collect DTD paths only when training
         self.dtd_paths: List[str] = []
@@ -215,6 +271,21 @@ class GlassLoaderAdapter:
 
             mask_gt = mask_bin                      # [B,1,H,W]
 
+            # ----- image paths (needed for fg_mask lookup and GLASS logging) -----
+            # extracting file paths for each image in the batch
+            # reading the file path strings from the existing batch dictionary and putting them into a standardized field
+            # parenting every yielded batch has image bath that holds list of length b
+            image_path: List[str] = []
+            for k in self.path_keys:
+                if k in batch:  # if the name is found
+                    v = batch[k]
+                    # if v is already a list, convert each element into a string
+                    # if v is a single value, repeat it B times so the image_path will have still the length B
+                    image_path = [str(x) for x in v] if isinstance(v, list) else [str(v)] * B
+                    break
+            if not image_path:
+                image_path = [""] * B
+
             # ----- TRAIN: DTD + Perlin augmentation -----
             # To create augmented anomalous version of the images during the training
             if self.is_train:
@@ -226,8 +297,10 @@ class GlassLoaderAdapter:
                         img[i],           # [3,H,W]
                         self.dtd_paths,
                         ph, pw, H, W,
-                        self.beta_mean,
-                        self.beta_std,
+                        image_path=image_path[i],   # passed so _load_fg_mask can find fg_mask file
+                        category=self.category,     # e.g. "bottle", "carpet", etc.
+                        beta_mean=self.beta_mean,
+                        beta_std=self.beta_std,
                     )
                     aug_list.append(aug_i)
                     mask_s_list.append(mask_s_i)    # [P,1]
@@ -243,21 +316,6 @@ class GlassLoaderAdapter:
                 aug        = img
                 mask_small = F.interpolate(mask_bin, size=(ph, pw), mode="nearest") # [B,1,ph,pw]
                 mask_s     = (mask_small.flatten(2).transpose(1, 2) > 0).long()  # [B,P,1]
-
-            # ----- image paths -----
-            # extracting file paths for each image in the batch
-            # reading the file path strings from the existing batch dictionary and putting them into a standardized field
-            # parenting every yielded batch has image bath that holds list of length b
-            image_path: List[str] = []
-            for k in self.path_keys:
-                if k in batch:  # if the name is found
-                    v = batch[k]
-                    # if v is already a list, convert each element into a string
-                    # if v is a single value, repeat it B times so the image_path will have still the length B
-                    image_path = [str(x) for x in v] if isinstance(v, list) else [str(v)] * B
-                    break
-            if not image_path:
-                image_path = [""] * B
 
             # yield returns one batch to the caller and the next time, it continues from the next batch
             yield {
