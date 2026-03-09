@@ -111,7 +111,7 @@ def run_glass(train_loader, val_loader, test_loader, category=None):
     patch_grid = tuple(patch_shapes[0])  # ensuring mask_s shape matches how _embed() patches. This goes into the GlassLoaderAdapter as (ph, pw)
 
     # loaders cannot directly be passed through the GLASS. We need a wrapper.
-    train_g = GlassLoaderAdapter(train_loader, patch_grid=patch_grid, is_train=True, dtd_root=str(DTD_PATH))
+    train_g = GlassLoaderAdapter(train_loader, patch_grid=patch_grid, is_train=True, dtd_root=str(DTD_PATH), category=category)
     #val_g = GlassLoaderAdapter(val_loader, patch_grid=patch_grid, is_train=False)
     test_g = GlassLoaderAdapter(test_loader, patch_grid=patch_grid, is_train=False)
 
