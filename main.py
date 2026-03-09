@@ -3,7 +3,7 @@ from configs.config import METHOD
 from runners.glass_runner import run_glass
 from runners.simplenet_runner import run_simplenet
 
-from glass_src.glass import GLASS
+#from glass_src.glass import GLASS
 from utils.glass_backbone_adapter import GlassBackboneAdapter
 from utils.glass_loader_adapter import GlassLoaderAdapter
 from pathlib import Path
