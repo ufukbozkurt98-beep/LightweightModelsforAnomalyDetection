@@ -51,7 +51,7 @@ def run_one_category(category: str, data_root: str):
                                         input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
 
     if METHOD.lower() == "glass":
-        run_glass(train_loader, val_loader, test_loader)
+        run_glass(train_loader, val_loader, test_loader, category=category)
     elif METHOD.lower() == "simplenet":
         run_simplenet(train_loader, val_loader, test_loader, category=category)
     else:
