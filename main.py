@@ -88,9 +88,9 @@ def main():
                                             input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
 
         if METHOD.lower() == "glass":
-            run_glass(train_loader, val_loader, test_loader)
+            run_glass(train_loader, val_loader, test_loader, category=CATEGORY)
         elif METHOD.lower() == "simplenet":
-            run_simplenet(train_loader, val_loader, test_loader, category=category)
+            run_simplenet(train_loader, val_loader, test_loader, category=CATEGORY)
         else:
             raise ValueError(f"Unknown METHOD: {METHOD}")
 
