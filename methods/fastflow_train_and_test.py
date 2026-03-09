@@ -30,6 +30,10 @@ def train_and_test_fastflow(
     weight_decay: float = 1e-5,
     input_size: int = 256,
     backbone_bench: dict | None = None,
+    # Enhancement toggles
+    zero_init: bool = True,
+    gauss_sigma: float = 4.0,
+    use_scheduler: bool = True,
 ):
     """
     Train and test FastFlow, return scores, anomaly maps and metrics.
@@ -61,6 +65,9 @@ def train_and_test_fastflow(
         lr=lr,
         meta_epochs=meta_epochs,
         weight_decay=weight_decay,
+        zero_init=zero_init,
+        gauss_sigma=gauss_sigma,
+        use_scheduler=use_scheduler,
     )
 
     # Collect ground truth early so eval_fn can use it during training
@@ -84,6 +91,9 @@ def train_and_test_fastflow(
     inference_bench, (scores, maps) = measure_inference_latency(fastflow.predict, test_loader, device=device)
     gpu_infer_mb = measure_gpu_memory_mb(dev)
 
+    # Measure FPS with warm-up and CUDA sync (same approach as CFlow paper measurement)
+    fps_bench = fastflow.measure_fps(test_loader)
+
     # Results
     img_auc = image_level_auroc(y_img, scores)
     pix_auc = pixel_level_auroc(y_pix, maps)
@@ -95,6 +105,7 @@ def train_and_test_fastflow(
         "aupro_0.3": float(pro),
         "backbone_benchmark": backbone_bench,
         "inference_benchmark": inference_bench,
+        "fps_benchmark": fps_bench,
         "gpu_train_mb": round(gpu_train_mb, 1),
         "gpu_infer_mb": round(gpu_infer_mb, 1),
     }
@@ -109,7 +120,10 @@ def train_and_test_fastflow(
     print(f"  GPU (infer)  : {gpu_infer_mb:.0f} MB")
     print(f"  Infer total  : {inference_bench['total_time_s']:.3f} s")
     print(f"  Infer/image  : {inference_bench['per_image_ms']:.2f} ms")
-    print(f"  Throughput   : {inference_bench['throughput_fps']:.1f} FPS")
+    print(f"  Pipeline FPS : {inference_bench['throughput_fps']:.1f} FPS")
+    print(f"  Model FPS    : {fps_bench['fps_all']:.1f} FPS  (encoder+NF+map)")
+    print(f"  NF+Map FPS   : {fps_bench['fps_additional']:.1f} FPS  (additional, same as paper)")
+    print(f"  Encoder FPS  : {fps_bench['fps_encoder']:.1f} FPS  (encoder only)")
     print(f"{'='*55}\n")
 
     return scores, maps, metrics

@@ -12,7 +12,7 @@ import FrEIA.modules as Fm
 from utils.data_adapters import TupleLoader
 
 
-def subnet_conv_func(kernel_size, hidden_ratio):
+def subnet_conv_func(kernel_size, hidden_ratio, zero_init=True):
     """
     This builds the small sub-network used inside coupling blocks
     It returns a function that builds a small nn.Sequential
@@ -28,9 +28,10 @@ def subnet_conv_func(kernel_size, hidden_ratio):
         padding = kernel_size // 2
         # Subnet: Conv → ReLU → Conv
         last_conv = nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding)
-        # Zero-init last conv so the flow starts as identity (from anomalib)
-        nn.init.zeros_(last_conv.weight)
-        nn.init.zeros_(last_conv.bias)
+        # Zero-init last conv so the flow starts as identity (enhancement)
+        if zero_init:
+            nn.init.zeros_(last_conv.weight)
+            nn.init.zeros_(last_conv.bias)
         return nn.Sequential(
             nn.Conv2d(in_channels, hidden_channels, kernel_size, padding=padding),
             nn.ReLU(),
@@ -40,7 +41,7 @@ def subnet_conv_func(kernel_size, hidden_ratio):
     return subnet_conv
 
 
-def create_fast_flow_block(input_dimensions, conv3x3_only, hidden_ratio, flow_steps, clamp=2.0):
+def create_fast_flow_block(input_dimensions, conv3x3_only, hidden_ratio, flow_steps, clamp=2.0, zero_init=True):
     """
     Builds a flow for a feature map
     """
@@ -55,7 +56,7 @@ def create_fast_flow_block(input_dimensions, conv3x3_only, hidden_ratio, flow_st
         nodes.append(
             Fm.AllInOneBlock,
             # Use subnet function for the coupling subnet
-            subnet_constructor=subnet_conv_func(kernel_size, hidden_ratio),
+            subnet_constructor=subnet_conv_func(kernel_size, hidden_ratio, zero_init),
             # Clamping for stability
             affine_clamping=clamp,
             # Controls permutation behavior in the block
@@ -92,8 +93,10 @@ class AnomalyMapGenerator(nn.Module):
         super().__init__()
         # check input size is a tuple
         self.input_size = tuple(input_size) if not isinstance(input_size, tuple) else input_size
-        # Store Gaussian kernel as a buffer for post-processing smoothing
-        self.register_buffer("_gauss_kernel", self._make_gaussian_kernel(sigma))
+        # Store Gaussian kernel as a buffer for post-processing smoothing (enhancement)
+        self.sigma = sigma
+        if sigma > 0:
+            self.register_buffer("_gauss_kernel", self._make_gaussian_kernel(sigma))
 
     @staticmethod
     def _make_gaussian_kernel(sigma, channels=1):
@@ -126,10 +129,11 @@ class AnomalyMapGenerator(nn.Module):
         flow_maps = torch.stack(flow_maps, dim=-1)
         anomaly_map = torch.mean(flow_maps, dim=-1)
 
-        # Gaussian smoothing to reduce pixel-level noise
-        pad = self._gauss_kernel.shape[-1] // 2
-        anomaly_map = F.pad(anomaly_map, (pad, pad, pad, pad), mode="reflect")
-        anomaly_map = F.conv2d(anomaly_map, self._gauss_kernel, groups=1)
+        # Gaussian smoothing to reduce pixel-level noise (enhancement)
+        if self.sigma > 0:
+            pad = self._gauss_kernel.shape[-1] // 2
+            anomaly_map = F.pad(anomaly_map, (pad, pad, pad, pad), mode="reflect")
+            anomaly_map = F.conv2d(anomaly_map, self._gauss_kernel, groups=1)
         return anomaly_map
 
 class FastFlowMethod:
@@ -149,6 +153,10 @@ class FastFlowMethod:
             meta_epochs=50,
             weight_decay=1e-5,
             verbose=True,
+            # Enhancement toggles (set to False/0.0 to match vanilla anomalib)
+            zero_init=True,
+            gauss_sigma=4.0,
+            use_scheduler=True,
     ):
         # Moves extractor to device and sets eval mode and freeze it
         self.extractor = extractor.to(device).eval()
@@ -167,13 +175,17 @@ class FastFlowMethod:
         self.weight_decay = weight_decay
         self.verbose = verbose
 
+        # Enhancement toggles
+        self.zero_init = zero_init
+        self.use_scheduler = use_scheduler
+
         # built them in fit()
         self.norms = None
         self.fast_flow_blocks = None
         self.optimizer = None
         self.scheduler = None
         self.criterion = FastflowLoss()
-        self.anomaly_map_generator = AnomalyMapGenerator(self.input_size).to(self.device)
+        self.anomaly_map_generator = AnomalyMapGenerator(self.input_size, sigma=gauss_sigma).to(self.device)
 
         # Best-epoch tracking (used when eval_fn is provided to fit())
         self._best_metric = -float("inf")
@@ -222,6 +234,7 @@ class FastFlowMethod:
                     hidden_ratio=self.hidden_ratio,
                     flow_steps=self.flow_steps,
                     clamp=self.clamp,
+                    zero_init=self.zero_init,
                 )
             )
         self.fast_flow_blocks = self.fast_flow_blocks.to(self.device)
@@ -230,10 +243,11 @@ class FastFlowMethod:
         params = list(self.fast_flow_blocks.parameters()) + list(self.norms.parameters())
         self.optimizer = torch.optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
 
-        # Cosine annealing: LR decays smoothly from lr to near-zero over all epochs
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-            self.optimizer, T_0=self.meta_epochs, eta_min=self.lr * 1e-3
-        )
+        # Cosine annealing: LR decays smoothly from lr to near-zero over all epochs (enhancement)
+        if self.use_scheduler:
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                self.optimizer, T_0=self.meta_epochs, eta_min=self.lr * 1e-3
+            )
 
         # Prints verification info
         print("\n" + "=" * 60)
@@ -320,8 +334,9 @@ class FastFlowMethod:
                 epoch_loss += loss.item()
                 batch_count += 1
 
-            # Step cosine annealing scheduler
-            self.scheduler.step(epoch)
+            # Step cosine annealing scheduler (enhancement)
+            if self.scheduler is not None:
+                self.scheduler.step(epoch)
 
             # print mean loss and lr
             if self.verbose:
@@ -412,3 +427,97 @@ class FastFlowMethod:
         maps = torch.cat(all_maps, dim=0)
 
         return scores, maps
+
+    @torch.no_grad()
+    def measure_fps(self, test_loader):
+        """
+        Measure FPS with warm-up and CUDA sync.
+        Matches FastFlow paper methodology: reports "additional inference time"
+        (NF + anomaly map only, excluding backbone) as well as encoder-only
+        and full pipeline FPS.
+        """
+        import time
+
+        if self.fast_flow_blocks is None:
+            raise RuntimeError("Call fit() first.")
+
+        test_loader_t = TupleLoader(test_loader)
+        use_cuda = self.device.type == "cuda"
+        A = len(test_loader.dataset)
+
+        self.norms.eval()
+        self.fast_flow_blocks.eval()
+
+        # 1) Warm-up: full pass
+        for image, _, _ in test_loader_t:
+            image = image.to(self.device)
+            feats = self.extractor(image)
+            features = [feats["l1"], feats["l2"], feats["l3"]]
+            hidden_variables = []
+            for i, feature in enumerate(features):
+                feature = self.norms[i](feature)
+                z, _ = self.fast_flow_blocks[i](feature)
+                hidden_variables.append(z)
+            _ = self.anomaly_map_generator(hidden_variables)
+
+        # 2) Encoder-only timing (backbone)
+        if use_cuda:
+            torch.cuda.synchronize()
+        t0 = time.time()
+        for image, _, _ in test_loader_t:
+            image = image.to(self.device)
+            _ = self.extractor(image)
+        if use_cuda:
+            torch.cuda.synchronize()
+        time_enc = time.time() - t0
+
+        # 3) "Additional inference time" (NF + anomaly map only, no backbone)
+        #    This is what the FastFlow paper reports — the overhead on top of backbone.
+        #    Pre-extract features, then time only the NF + map part.
+        cached_features = []
+        for image, _, _ in test_loader_t:
+            image = image.to(self.device)
+            feats = self.extractor(image)
+            cached_features.append([feats["l1"], feats["l2"], feats["l3"]])
+
+        if use_cuda:
+            torch.cuda.synchronize()
+        t0 = time.time()
+        for features in cached_features:
+            hidden_variables = []
+            for i, feature in enumerate(features):
+                feature = self.norms[i](feature)
+                z, _ = self.fast_flow_blocks[i](feature)
+                hidden_variables.append(z)
+            _ = self.anomaly_map_generator(hidden_variables)
+        if use_cuda:
+            torch.cuda.synchronize()
+        time_additional = time.time() - t0
+
+        # 4) Full pipeline timing (encoder + NF + anomaly map)
+        if use_cuda:
+            torch.cuda.synchronize()
+        t0 = time.time()
+        for image, _, _ in test_loader_t:
+            image = image.to(self.device)
+            feats = self.extractor(image)
+            features = [feats["l1"], feats["l2"], feats["l3"]]
+            hidden_variables = []
+            for i, feature in enumerate(features):
+                feature = self.norms[i](feature)
+                z, _ = self.fast_flow_blocks[i](feature)
+                hidden_variables.append(z)
+            _ = self.anomaly_map_generator(hidden_variables)
+        if use_cuda:
+            torch.cuda.synchronize()
+        time_all = time.time() - t0
+
+        fps_enc = A / time_enc
+        fps_additional = A / time_additional
+        fps_all = A / time_all
+
+        return {
+            "fps_encoder": round(fps_enc, 2),
+            "fps_additional": round(fps_additional, 2),
+            "fps_all": round(fps_all, 2),
+        }
