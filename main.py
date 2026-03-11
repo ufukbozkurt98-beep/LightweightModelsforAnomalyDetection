@@ -65,6 +65,10 @@ def main():
     if RUN_ALL:
         # ── loop over every category ──────────────────────────────────────────
         for cat in ALL_CATEGORIES:
+            result_file = REPORTS_DIR / "benchmark_results" / f"{cat}_{METHOD.lower()}_results.json"
+            if result_file.exists():
+                print(f"Skipping {cat} — already done")
+                continue
             print(f"\n{'='*60}")
             print(f"  Running {METHOD.upper()} on: {cat.upper()}")
             print(f"{'='*60}\n")
