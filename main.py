@@ -118,7 +118,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             backbone_name=BACKBONE_KEY,
             device=device,
             flow_steps=8,
-            conv3x3_only=True,
+            conv3x3_only=1.0,
             hidden_ratio=1.5,
             clamp=2.0,
             lr=1e-3,
@@ -129,7 +129,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             # Enhancement toggles (set to False/0.0 to match vanilla anomalib)
             zero_init=False,
             gauss_sigma=0.0,
-            use_scheduler=False,
+            use_scheduler=True,
         )
         return metrics
     else:
