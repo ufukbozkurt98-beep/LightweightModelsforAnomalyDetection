@@ -118,7 +118,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             backbone_name=BACKBONE_KEY,
             device=device,
             flow_steps=8,
-            conv3x3_only=1.0,
+            conv3x3_only=True,
             hidden_ratio=1.0,
             clamp=2.0,
             lr=1e-3,
@@ -127,9 +127,9 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             input_size=IMAGE_INPUT_SIZE,
             backbone_bench=backbone_bench,
             # Enhancement toggles (set to False/0.0 to match vanilla anomalib)
-            zero_init=False,
+            zero_init=True,
             gauss_sigma=4.0,
-            use_scheduler=False,
+            use_scheduler=True,
         )
         return metrics
     else:
