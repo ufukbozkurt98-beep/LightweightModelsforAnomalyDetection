@@ -127,7 +127,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             input_size=IMAGE_INPUT_SIZE,
             backbone_bench=backbone_bench,
             # Enhancement toggles (set to False/0.0 to match vanilla anomalib)
-            zero_init=True,
+            zero_init=False,
             gauss_sigma=4.0,
             use_scheduler=True,
         )
