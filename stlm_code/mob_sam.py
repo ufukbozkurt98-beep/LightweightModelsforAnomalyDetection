@@ -192,6 +192,12 @@ class Batch_SamE(nn.Module):
         self.device = device
         self.model = sam_model_registry[self.model_type](checkpoint=self.sam_checkpoint)
         self.model = _replace_mask_decoder(self.model)
+        # Replace the unused image_encoder with a lightweight stub to free memory.
+        # We use our own encoderT/encoderS instead. Sam.preprocess() only needs
+        # image_encoder.img_size (= 1024), so a stub with that attribute is sufficient.
+        _img_size = self.model.image_encoder.img_size
+        self.model.image_encoder = nn.Module()
+        self.model.image_encoder.img_size = _img_size
         self.model = self.model.to(device=self.device)
         self.encoderT = _build_encoder(backbone_key, self.device)
         self.encoderS = _build_encoder(backbone_key, self.device)

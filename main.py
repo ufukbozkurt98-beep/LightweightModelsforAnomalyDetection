@@ -70,6 +70,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             mobile_sam_path="./weights/mobile_sam.pt",
             sam_vit_h_path="./weights/sam_vit_h_4b8939.pth",
             backbone_key=BACKBONE_KEY,
+            backbone_bench=backbone_bench,
         )
         return metrics
 
@@ -210,6 +211,13 @@ def main():
         backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
         print_benchmark_results(backbone_bench, label=f"Backbone ({BACKBONE_KEY})")
         del extractor  # free memory, each category builds its own
+    elif METHOD.lower() == "stlm":
+        from stlm_code.mob_sam import BackboneEncoderAdapter
+        adapter = BackboneEncoderAdapter(BACKBONE_KEY, pretrained=True).eval()
+        dummy_input = torch.randn(1, 3, 1024, 1024)
+        backbone_bench = run_all_benchmarks(adapter, dummy_input, device=device)
+        print_benchmark_results(backbone_bench, label=f"STLM Encoder ({BACKBONE_KEY})")
+        del adapter
 
     all_results = {}
 

@@ -7,13 +7,16 @@ import argparse
 import os
 import torch
 from stlm_code.trainSTLM import train
+from utils.model_benchmark import (
+    reset_gpu_peak, measure_gpu_memory_mb,
+)
 
 
 def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/images/",
              mobile_sam_path="./weights/mobile_sam.pt",
              sam_vit_h_path="./weights/sam_vit_h_4b8939.pth",
              gpu_id=0, num_workers=8, steps=200, eval_per_steps=5,
-             backbone_key=None):
+             backbone_key=None, backbone_bench=None):
     """Run STLM training and evaluation for a single category.
 
     Args:
@@ -74,11 +77,25 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
     print(f"  teacher: SAM ViT-H ({sam_vit_h_path})")
     print(f"  student encoder: {enc_name}")
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     if torch.cuda.is_available():
+        reset_gpu_peak(device)
         with torch.cuda.device(gpu_id):
-            metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
+            raw = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
+        gpu_train_mb = measure_gpu_memory_mb(device)
     else:
         print("  WARNING: No CUDA GPU found. Running on CPU (will be very slow).")
-        metrics = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
+        raw = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
+        gpu_train_mb = 0.0
 
+    # Normalize metric keys to match project's print_summary_table() format
+    metrics = {
+        "image_auroc": raw.get("auc_detect_fa", 0),
+        "pixel_auroc": raw.get("auc_fa", 0),
+        "aupro_0.3": raw.get("aupro_fa", 0),
+        "backbone_benchmark": backbone_bench,
+        "gpu_train_mb": round(gpu_train_mb, 1),
+        "stlm_raw": raw,  # keep original STLM metrics for reference
+    }
     return metrics
