@@ -31,8 +31,7 @@ LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
     "mobilevit_xs": BackboneSpec(source="timm", name="mobilevit_xs", out_indices=(1, 2, 3)),
     "mobilevit_s": BackboneSpec(source="timm", name="mobilevit_s", out_indices=(1, 2, 3)),
 
-    # ShuffleNet
-    "shufflenet_g1": BackboneSpec(source="custom_shufflenet", name="shufflenet_g1"),
+    # ShuffleNet V1 (official Megvii implementation)
     "shufflenet_g3": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3"),
     "shufflenet_g8": BackboneSpec(source="custom_shufflenet", name="shufflenet_g8"),
 
@@ -129,7 +128,7 @@ class _TimmFeaturesOnly(nn.Module):
 
 class _ShuffleNetFeaturesOnly(nn.Module):
     """
-    Extract multi-scale features using ShuffleNet implementation.
+    Extract multi-scale features using ShuffleNet V1 (official Megvii implementation).
     Returns {"l1", "l2", "l3"} from stage2, stage3, stage4.
 
     Pretrained ImageNet weights (official, from Megvii/Face++ paper authors, MIT license)
@@ -137,21 +136,18 @@ class _ShuffleNetFeaturesOnly(nn.Module):
 
     Download from: https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo
     Source: https://github.com/megvii-model/ShuffleNet-Series (MIT license)
-
-    Also supports third-party checkpoints (jaxony, ericsun99) — format is auto-detected.
     """
 
-    # Map of model name -> (groups, scale, weight filename or None)
+    # Map of model name -> (group, model_size, weight filename or None)
     _CONFIGS = {
-        "shufflenet_g1":  (1, 1.0, None),  # no pretrained weights available
-        "shufflenet_g3":  (3, 1.0, "shufflenet_g3.pth.tar"),
-        "shufflenet_g8":  (8, 1.0, "shufflenet_g8.pth.tar"),
+        "shufflenet_g3":  (3, "1.0x", "shufflenet_g3.pth.tar"),
+        "shufflenet_g8":  (8, "1.0x", "shufflenet_g8.pth.tar"),
     }
 
     def __init__(self, model_name: str) -> None:
         super().__init__()
         from pathlib import Path
-        from utils.shufflenet import ShuffleNet, load_pretrained_shufflenet
+        from utils.shufflenet import ShuffleNetV1, load_pretrained_shufflenet
 
         if model_name not in self._CONFIGS:
             raise ValueError(
@@ -159,10 +155,10 @@ class _ShuffleNetFeaturesOnly(nn.Module):
                 f"Available: {list(self._CONFIGS.keys())}"
             )
 
-        groups, scale, weight_file = self._CONFIGS[model_name]
+        group, model_size, weight_file = self._CONFIGS[model_name]
 
-        # num_classes=0 disables the classifier head since we only need features
-        self.backbone = ShuffleNet(groups=groups, num_classes=0, scale=scale)
+        # n_class=0 disables the classifier head since we only need features
+        self.backbone = ShuffleNetV1(group=group, model_size=model_size, n_class=0)
 
         # Load pretrained weights if checkpoint file exists
         if weight_file is not None:
@@ -175,15 +171,15 @@ class _ShuffleNetFeaturesOnly(nn.Module):
                 print(f"  ShuffleNet will use random initialization.")
                 print(f"  To use pretrained weights, download from official Megvii repo:")
                 print(f"    https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo")
-                print(f"  and save the 1.0x g={groups} checkpoint as: {weight_path}")
+                print(f"  and save the {model_size} g={group} checkpoint as: {weight_path}")
 
-        # Store feature channel counts for each level
+        # Store feature channel counts for each level (indices 2,3,4 = stage2,3,4)
         self.feature_channels = {
-            f"l{i+1}": c for i, c in enumerate(self.backbone.stage_out_channels)
+            f"l{i+1}": self.backbone.stage_out_channels[i + 2]
+            for i in range(3)
         }
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        # Extract multi-scale features
         return self.backbone.forward_features(x)
 
 
