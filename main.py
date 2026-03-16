@@ -4,6 +4,7 @@ from runners.simplenet_runner import run_simplenet
 
 # from glass_src.glass import GLASS  # import the GLASS object from the glass.py file of glass_src package
 # --------------------------------
+import json
 from pathlib import Path  # to enable to use path objects and /|\ handling
 
 from configs.config import (
@@ -219,15 +220,35 @@ def main():
         print_benchmark_results(backbone_bench, label=f"STLM Encoder ({BACKBONE_KEY})")
         del adapter
 
+    # Resume support: save results after each category so interrupted runs can continue.
+    # Results file: data/reports/{method}_{backbone}_results.json
+    results_file = REPORTS_DIR / f"{METHOD.lower()}_{BACKBONE_KEY}_results.json"
     all_results = {}
+    if results_file.exists():
+        with open(results_file, "r") as f:
+            all_results = json.load(f)
+        completed = [c for c in categories if c in all_results]
+        if completed:
+            print(f"\n  Resuming: {len(completed)}/{len(categories)} categories already done.")
+            print(f"  Completed: {', '.join(completed)}")
+            print(f"  Results file: {results_file}")
 
     for i, cat in enumerate(categories):
+        if cat in all_results:
+            print(f"\n  [{i+1}/{len(categories)}] {cat}: SKIPPED (already completed)")
+            continue
+
         print(f"\n{'#'*80}")
         print(f"  [{i+1}/{len(categories)}] Category: {cat}")
         print(f"{'#'*80}\n")
 
         metrics = run_single_category(cat, data_root, device, backbone_bench=backbone_bench, cflow_out_indices=cflow_out_indices, channel_cap=channel_cap)
         all_results[cat] = metrics
+
+        # Save after each category so progress is not lost
+        with open(results_file, "w") as f:
+            json.dump(all_results, f, indent=2, default=str)
+        print(f"  Results saved to {results_file}")
 
     # Print summary table if multiple categories were run
     if len(categories) > 1:
