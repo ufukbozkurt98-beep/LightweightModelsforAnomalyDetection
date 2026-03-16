@@ -30,7 +30,7 @@ ALL_MVTEC_CATEGORIES = [
 ]
 
 
-def run_single_category(category, data_root, device, backbone_bench=None, cflow_out_indices=None):
+def run_single_category(category, data_root, device, backbone_bench=None, cflow_out_indices=None, channel_cap=None):
     """Run training and evaluation for a single MVTec AD category."""
     split_json = REPORTS_DIR / f"mvtec_{category}_split.json"
 
@@ -218,7 +218,7 @@ def main():
         print(f"  [{i+1}/{len(categories)}] Category: {cat}")
         print(f"{'#'*80}\n")
 
-        metrics = run_single_category(cat, data_root, device, backbone_bench=backbone_bench, cflow_out_indices=cflow_out_indices)
+        metrics = run_single_category(cat, data_root, device, backbone_bench=backbone_bench, cflow_out_indices=cflow_out_indices, channel_cap=channel_cap)
         all_results[cat] = metrics
 
     # Print summary table if multiple categories were run
