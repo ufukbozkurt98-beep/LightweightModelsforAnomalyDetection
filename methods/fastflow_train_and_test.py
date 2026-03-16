@@ -34,6 +34,7 @@ def train_and_test_fastflow(
     zero_init: bool = True,
     gauss_sigma: float = 4.0,
     use_scheduler: bool = True,
+    channel_cap: int | None = None,
 ):
     """
     Train and test FastFlow, return scores, anomaly maps and metrics.
@@ -68,6 +69,7 @@ def train_and_test_fastflow(
         zero_init=zero_init,
         gauss_sigma=gauss_sigma,
         use_scheduler=use_scheduler,
+        channel_cap=channel_cap,
     )
 
     # Collect ground truth early so eval_fn can use it during training

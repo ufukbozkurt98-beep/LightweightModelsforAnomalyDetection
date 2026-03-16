@@ -12,6 +12,7 @@ import copy
 import math
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from methods.cflow_freia import load_decoder_arch, activation
 from utils.cflow_utils import train_meta_epoch, test_meta_epoch, test_meta_fps
@@ -22,20 +23,28 @@ class TimmActivationEncoder(torch.nn.Module):
     """
     In the original CFLOW, the encoder fills activation['layer0', 'layer1', 'layer2'] using forward hooks.
     In this project, the extractor returns features 'l1', 'l2', 'l3', and we map them to activation.
+
+    Optional channel reduction: for wide-channel backbones (e.g. ShuffleNet 240/480/960),
+    fixed 1x1 conv projections reduce channels before the normalizing flow sees them.
+    The reducers are non-trainable (random projection) since CFlow's training loop
+    in cflow_utils.py detaches features, preventing gradient flow to the encoder.
     """
 
-    def __init__(self, extractor, pool_layers):
+    def __init__(self, extractor, pool_layers, reducers=None):
         super().__init__()
         self.extractor = extractor
         self.pool_layers = pool_layers  # ['layer0','layer1','layer2']
+        self.reducers = reducers  # nn.ModuleList of [Conv2d or None] or None
 
     @torch.no_grad()
     def forward(self, x):
         feats = self.extractor(x)  # dict: l1,l2,l3
         # Save features to the global activation dict using CFLOW layer names.
-        activation[self.pool_layers[0]] = feats["l1"].detach()
-        activation[self.pool_layers[1]] = feats["l2"].detach()
-        activation[self.pool_layers[2]] = feats["l3"].detach()
+        for i, key in enumerate(["l1", "l2", "l3"]):
+            f = feats[key].detach()
+            if self.reducers is not None and self.reducers[i] is not None:
+                f = self.reducers[i](f)
+            activation[self.pool_layers[i]] = f
         return feats
 
 
@@ -65,6 +74,7 @@ class CFlowMethod:
             input_size=256,
             verbose=True,
             hide_tqdm_bar=False,
+            channel_cap=None,
     ):
         # Freeze the extractor (eval mode). Only the decoders will learn.
         self.extractor = extractor.to(device).eval()
@@ -109,7 +119,31 @@ class CFlowMethod:
         self.c = c
         self.N = N
         self.pool_layers = ["layer" + str(i) for i in range(pool_layers)]
-        self.encoder = TimmActivationEncoder(self.extractor, self.pool_layers).to(device).eval()
+
+        # Build fixed channel reducers for wide-channel backbones (e.g. ShuffleNet)
+        reducers = None
+        if channel_cap is not None:
+            fc = extractor.feature_channels
+            reducer_list = []
+            needs_reduction = False
+            for key in ["l1", "l2", "l3"]:
+                C = fc[key]
+                if C > channel_cap:
+                    r = nn.Conv2d(C, channel_cap, 1, bias=False)
+                    nn.init.kaiming_normal_(r.weight)
+                    for p in r.parameters():
+                        p.requires_grad = False
+                    reducer_list.append(r)
+                    needs_reduction = True
+                    if verbose:
+                        print(f"  Channel reduction: {key} {C} -> {channel_cap}")
+                else:
+                    reducer_list.append(None)
+            if needs_reduction:
+                reducers = nn.ModuleList(reducer_list).to(device)
+                reducers.eval()
+
+        self.encoder = TimmActivationEncoder(self.extractor, self.pool_layers, reducers=reducers).to(device).eval()
 
         self.decoders = None
         self.optimizer = None

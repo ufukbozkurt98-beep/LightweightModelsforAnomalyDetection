@@ -32,6 +32,7 @@ def train_and_test_cflow(
     best_metric: str = "pixel",
     backbone_bench: dict | None = None,
     out_indices: tuple | None = None,
+    channel_cap: int | None = None,
 ):
 
     if device is None:
@@ -60,6 +61,7 @@ def train_and_test_cflow(
         sub_epochs=sub_epochs,
         N=N,
         input_size=input_size,
+        channel_cap=channel_cap,
     )
 
     # Collect ground truth early so eval_fn can use it during training

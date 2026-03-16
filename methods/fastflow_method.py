@@ -157,6 +157,7 @@ class FastFlowMethod:
             zero_init=True,
             gauss_sigma=4.0,
             use_scheduler=True,
+            channel_cap=None,
     ):
         # Moves extractor to device and sets eval mode and freeze it
         self.extractor = extractor.to(device).eval()
@@ -178,8 +179,10 @@ class FastFlowMethod:
         # Enhancement toggles
         self.zero_init = zero_init
         self.use_scheduler = use_scheduler
+        self.channel_cap = channel_cap
 
         # built them in fit()
+        self.reducers = None
         self.norms = None
         self.fast_flow_blocks = None
         self.optimizer = None
@@ -190,6 +193,7 @@ class FastFlowMethod:
         # Best-epoch tracking (used when eval_fn is provided to fit())
         self._best_metric = -float("inf")
         self._best_epoch = -1
+        self._best_reducers_state = None
         self._best_norms_state = None
         self._best_blocks_state = None
 
@@ -212,7 +216,24 @@ class FastFlowMethod:
             channels.append(C)
             scales.append((H, W))
 
-        # LayerNorm per feature scale for stability
+        # Channel reducers for wide-channel backbones (e.g. ShuffleNet 240/480/960)
+        # Trainable 1x1 conv + BN that project to lower dimension before the NF
+        self.reducers = nn.ModuleList()
+        for i in range(len(channels)):
+            C = channels[i]
+            if self.channel_cap is not None and C > self.channel_cap:
+                self.reducers.append(nn.Sequential(
+                    nn.Conv2d(C, self.channel_cap, 1, bias=False),
+                    nn.BatchNorm2d(self.channel_cap),
+                ))
+                if self.verbose:
+                    print(f"  Channel reduction: l{i+1} {C} -> {self.channel_cap}")
+                channels[i] = self.channel_cap  # update for norm/NF creation
+            else:
+                self.reducers.append(nn.Identity())
+        self.reducers = self.reducers.to(self.device)
+
+        # LayerNorm per feature scale for stability (uses reduced channels)
         self.norms = nn.ModuleList()
         for i, key in enumerate(["l1", "l2", "l3"]):
             C = channels[i]
@@ -239,8 +260,10 @@ class FastFlowMethod:
             )
         self.fast_flow_blocks = self.fast_flow_blocks.to(self.device)
 
-        # Optimize NF block and LayerNorm parameters, backbone is still frozen
-        params = list(self.fast_flow_blocks.parameters()) + list(self.norms.parameters())
+        # Optimize NF block, LayerNorm, and reducer parameters. Backbone is still frozen.
+        params = (list(self.fast_flow_blocks.parameters())
+                  + list(self.norms.parameters())
+                  + list(self.reducers.parameters()))
         self.optimizer = torch.optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
 
         # Cosine annealing: LR decays smoothly from lr to near-zero over all epochs (enhancement)
@@ -266,12 +289,14 @@ class FastFlowMethod:
     # ------------------------------------------------------------------
 
     def _save_best_state(self):
-        """Deep-copy current norms + flow block weights to CPU."""
+        """Deep-copy current reducers + norms + flow block weights to CPU."""
+        self._best_reducers_state = copy.deepcopy(self.reducers.state_dict())
         self._best_norms_state = copy.deepcopy(self.norms.state_dict())
         self._best_blocks_state = copy.deepcopy(self.fast_flow_blocks.state_dict())
 
     def _load_best_state(self):
         """Restore previously saved best weights."""
+        self.reducers.load_state_dict(self._best_reducers_state)
         self.norms.load_state_dict(self._best_norms_state)
         self.fast_flow_blocks.load_state_dict(self._best_blocks_state)
 
@@ -296,6 +321,7 @@ class FastFlowMethod:
 
         # Wrap loader and set modules to train mode.
         train_loader_t = TupleLoader(train_loader)
+        self.reducers.train()
         self.norms.train()
         self.fast_flow_blocks.train()
 
@@ -314,10 +340,11 @@ class FastFlowMethod:
                 # Collects three scales
                 features = [feats["l1"], feats["l2"], feats["l3"]]
 
-                # For each scale normalize, flow forward, collect z and jacobian.
+                # For each scale: reduce channels (if needed), normalize, flow forward.
                 hidden_variables = []
                 log_jacobians = []
                 for i, feature in enumerate(features):
+                    feature = self.reducers[i](feature)
                     feature = self.norms[i](feature)
                     hidden_variable, log_jacobian = self.fast_flow_blocks[i](feature)
                     hidden_variables.append(hidden_variable)
@@ -350,6 +377,7 @@ class FastFlowMethod:
 
             # Periodic evaluation for best-epoch selection
             if eval_fn is not None and (epoch + 1) % eval_every == 0:
+                self.reducers.eval()
                 self.norms.eval()
                 self.fast_flow_blocks.eval()
                 result = eval_fn()
@@ -368,6 +396,7 @@ class FastFlowMethod:
                     self._best_metric = metric
                     self._best_epoch = epoch
                     self._save_best_state()
+                self.reducers.train()
                 self.norms.train()
                 self.fast_flow_blocks.train()
 
@@ -379,6 +408,7 @@ class FastFlowMethod:
                       f"(combined={self._best_metric:.4f})")
 
         #  training is done
+        self.reducers.eval()
         self.norms.eval()
         self.fast_flow_blocks.eval()
 
@@ -390,6 +420,7 @@ class FastFlowMethod:
         if self.fast_flow_blocks is None:
             raise RuntimeError("Call fit() first.")
 
+        self.reducers.eval()
         self.norms.eval()
         self.fast_flow_blocks.eval()
 
@@ -405,9 +436,10 @@ class FastFlowMethod:
             feats = self.extractor(image)
             features = [feats["l1"], feats["l2"], feats["l3"]]
 
-            # Forward through NF blocks
+            # Forward through reducers + NF blocks
             hidden_variables = []
             for i, feature in enumerate(features):
+                feature = self.reducers[i](feature)
                 feature = self.norms[i](feature)
                 hidden_variable, _log_jacobian = self.fast_flow_blocks[i](feature)
                 hidden_variables.append(hidden_variable)
@@ -445,6 +477,7 @@ class FastFlowMethod:
         use_cuda = self.device.type == "cuda"
         A = len(test_loader.dataset)
 
+        self.reducers.eval()
         self.norms.eval()
         self.fast_flow_blocks.eval()
 
@@ -455,6 +488,7 @@ class FastFlowMethod:
             features = [feats["l1"], feats["l2"], feats["l3"]]
             hidden_variables = []
             for i, feature in enumerate(features):
+                feature = self.reducers[i](feature)
                 feature = self.norms[i](feature)
                 z, _ = self.fast_flow_blocks[i](feature)
                 hidden_variables.append(z)
@@ -486,6 +520,7 @@ class FastFlowMethod:
         for features in cached_features:
             hidden_variables = []
             for i, feature in enumerate(features):
+                feature = self.reducers[i](feature)
                 feature = self.norms[i](feature)
                 z, _ = self.fast_flow_blocks[i](feature)
                 hidden_variables.append(z)
@@ -504,6 +539,7 @@ class FastFlowMethod:
             features = [feats["l1"], feats["l2"], feats["l3"]]
             hidden_variables = []
             for i, feature in enumerate(features):
+                feature = self.reducers[i](feature)
                 feature = self.norms[i](feature)
                 z, _ = self.fast_flow_blocks[i](feature)
                 hidden_variables.append(z)

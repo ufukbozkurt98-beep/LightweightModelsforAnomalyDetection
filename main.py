@@ -109,6 +109,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             best_metric="combined",  # "pixel" = original CFlow paper, "combined" = (img+pix)/2
             backbone_bench=backbone_bench,
             out_indices=cflow_out_indices,
+            channel_cap=channel_cap,
         )
         return metrics
     elif METHOD.lower() == "fastflow":
@@ -130,6 +131,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             zero_init=False,
             gauss_sigma=4.0,
             use_scheduler=True,
+            channel_cap=channel_cap,
         )
         return metrics
     else:
@@ -186,6 +188,19 @@ def main():
     # CFlow-AD original paper uses deeper feature layers: features[-11,-5,-2]
     # which corresponds to out_indices=(2,3,4) in timm → 32×32, 16×16, 8×8
     cflow_out_indices = (2, 3, 4) if METHOD.lower() == "cflow" else None
+
+    # Auto-detect channel_cap for wide-channel backbones (e.g. ShuffleNet 240/480/960).
+    # NF-based methods (CFlow, FastFlow) struggle with >256 channels per scale.
+    # Adds a 1x1 conv to reduce channels before the normalizing flow.
+    channel_cap = None
+    if METHOD.lower() in ("cflow", "fastflow"):
+        from utils.feature_extractor import build_extractor as _be
+        _tmp = _be(BACKBONE_KEY, pretrained=False)
+        max_ch = max(_tmp.feature_channels.values())
+        if max_ch > 512:
+            channel_cap = 256
+            print(f"  Auto channel_cap={channel_cap} (backbone max channel={max_ch} > 512)")
+        del _tmp
 
     # Run backbone benchmark once before the category loop
     backbone_bench = None
