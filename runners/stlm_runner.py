@@ -4,12 +4,86 @@ Runs STLM training and evaluation for a given category using original paper sett
 """
 
 import argparse
-import os
+import time
 import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from stlm_code.trainSTLM import train
+from stlm_code.constant import RESIZE_SHAPE
+from stlm_code.data.mvtec_dataset import MVTecDataset
+from stlm_code.model.model_utils import l2_norm
 from utils.model_benchmark import (
     reset_gpu_peak, measure_gpu_memory_mb,
 )
+
+
+def _measure_stlm_inference(args, category, twostream, segmentation_net, device):
+    """Run a timed inference pass over the test set (student + SegNet only, no teacher).
+
+    This measures pure inference latency consistently with CFlow/FastFlow/GLASS.
+    Only the student forward pass and SegmentationNet are timed — metric
+    computation (AUROC, AUPRO) is excluded.
+    """
+    twostream.eval()
+    segmentation_net.eval()
+
+    dataset = MVTecDataset(
+        is_train=False,
+        mvtec_dir=args.mvtec_path + category + "/test/",
+        resize_shape=RESIZE_SHAPE,
+    )
+    dataloader = DataLoader(
+        dataset, batch_size=args.bs, shuffle=False, num_workers=args.num_workers
+    )
+
+    num_images = len(dataset)
+    use_cuda = device.type == "cuda"
+
+    with torch.no_grad():
+        # Warmup
+        for sample in dataloader:
+            img = sample["img"].to(device)
+            pfeature, dfeature = twostream(img)
+            outputs_plain = [l2_norm(p.detach()) for p in pfeature]
+            outputs_denoising = [l2_norm(d.detach()) for d in dfeature]
+            output = torch.cat(
+                [F.interpolate(-op * od, size=outputs_denoising[0].size()[2:],
+                               mode="bilinear", align_corners=False)
+                 for op, od in zip(outputs_plain, outputs_denoising)],
+                dim=1,
+            )
+            segmentation_net(output)
+            break  # single batch warmup
+
+        if use_cuda:
+            torch.cuda.synchronize()
+
+        # Timed pass
+        t0 = time.perf_counter()
+        for sample in dataloader:
+            img = sample["img"].to(device)
+            pfeature, dfeature = twostream(img)
+            outputs_plain = [l2_norm(p.detach()) for p in pfeature]
+            outputs_denoising = [l2_norm(d.detach()) for d in dfeature]
+            output = torch.cat(
+                [F.interpolate(-op * od, size=outputs_denoising[0].size()[2:],
+                               mode="bilinear", align_corners=False)
+                 for op, od in zip(outputs_plain, outputs_denoising)],
+                dim=1,
+            )
+            segmentation_net(output)
+
+        if use_cuda:
+            torch.cuda.synchronize()
+        total_s = time.perf_counter() - t0
+
+    per_image_ms = (total_s / num_images) * 1000.0
+    return {
+        "total_time_s": round(total_s, 3),
+        "num_images": num_images,
+        "per_image_ms": round(per_image_ms, 2),
+        "throughput_fps": round(1000.0 / per_image_ms, 1) if per_image_ms > 0 else 0,
+    }
 
 
 def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/images/",
@@ -30,9 +104,10 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
         steps: Training epochs
         eval_per_steps: Evaluate every N epochs
         backbone_key: None/"tinyvit" for original TinyViT, or backbone key for custom encoder
+        backbone_bench: Pre-computed backbone benchmark results (from main.py)
 
     Returns:
-        dict with best metrics
+        dict with best metrics and inference benchmark
     """
 
     # Category rotation settings from the paper
@@ -82,20 +157,57 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
     if torch.cuda.is_available():
         reset_gpu_peak(device)
         with torch.cuda.device(gpu_id):
-            raw = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
+            raw, twostream, segmentation_net = train(
+                args, category, rotate_90=rotate_90,
+                random_rotate=random_rotate, backbone_key=backbone_key
+            )
         gpu_train_mb = measure_gpu_memory_mb(device)
     else:
         print("  WARNING: No CUDA GPU found. Running on CPU (will be very slow).")
-        raw = train(args, category, rotate_90=rotate_90, random_rotate=random_rotate, backbone_key=backbone_key)
+        raw, twostream, segmentation_net = train(
+            args, category, rotate_90=rotate_90,
+            random_rotate=random_rotate, backbone_key=backbone_key
+        )
         gpu_train_mb = 0.0
+
+    # Inference benchmark (student + SegNet only, no teacher needed)
+    print(f"  Measuring inference latency on test set...")
+    reset_gpu_peak(device)
+    inference_bench = _measure_stlm_inference(args, category, twostream, segmentation_net, device)
+    gpu_infer_mb = measure_gpu_memory_mb(device)
+
+    # Print per-category benchmark summary
+    print(f"\n{'='*55}")
+    print(f"  PER-CATEGORY BENCHMARK: {category.upper()}")
+    print(f"{'='*55}")
+    print(f"  Best epoch   : {raw.get('epoch', 'N/A')}")
+    print(f"  I-AUROC (FA) : {raw.get('auc_detect_fa', 0) * 100:.2f}%")
+    print(f"  P-AUROC (FA) : {raw.get('auc_fa', 0) * 100:.2f}%")
+    print(f"  AUPRO (FA)   : {raw.get('aupro_fa', 0) * 100:.2f}%")
+    print(f"  I-AUROC (TLM): {raw.get('auc_detect_tlm', 0) * 100:.2f}%")
+    print(f"  P-AUROC (TLM): {raw.get('auc_tlm', 0) * 100:.2f}%")
+    print(f"  AUPRO (TLM)  : {raw.get('aupro_tlm', 0) * 100:.2f}%")
+    print(f"  GPU (train)  : {gpu_train_mb:.0f} MB")
+    print(f"  GPU (infer)  : {gpu_infer_mb:.0f} MB")
+    print(f"  Infer total  : {inference_bench['total_time_s']:.3f} s")
+    print(f"  Infer/image  : {inference_bench['per_image_ms']:.2f} ms")
+    print(f"  Throughput   : {inference_bench['throughput_fps']:.1f} FPS")
+    print(f"{'='*55}\n")
+
+    # Free teacher/training memory — only student + segnet needed from here
+    del twostream, segmentation_net
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     # Normalize metric keys to match project's print_summary_table() format
     metrics = {
         "image_auroc": raw.get("auc_detect_fa", 0),
         "pixel_auroc": raw.get("auc_fa", 0),
         "aupro_0.3": raw.get("aupro_fa", 0),
+        "inference_benchmark": inference_bench,
         "backbone_benchmark": backbone_bench,
         "gpu_train_mb": round(gpu_train_mb, 1),
+        "gpu_infer_mb": round(gpu_infer_mb, 1),
         "stlm_raw": raw,  # keep original STLM metrics for reference
     }
     return metrics

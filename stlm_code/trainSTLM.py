@@ -84,6 +84,23 @@ def train(args, category, rotate_90=False, random_rotate=0, backbone_key=None):
 
     best_metrics = {"aupro_fa": 0, "auc_fa": 0, "auc_detect_fa": 0}
 
+    # Epoch-level checkpoint for resuming interrupted training
+    ckpt_dir = os.path.join(args.checkpoint_path, "stlm_ckpt")
+    os.makedirs(ckpt_dir, exist_ok=True)
+    bb_tag = backbone_key if backbone_key else "tinyvit"
+    ckpt_path = os.path.join(ckpt_dir, f"{category}_{bb_tag}.pt")
+
+    if os.path.exists(ckpt_path):
+        print(f"  Resuming from checkpoint: {ckpt_path}")
+        ckpt = torch.load(ckpt_path, map_location=device)
+        twostream.load_state_dict(ckpt["twostream"])
+        segmentation_net.load_state_dict(ckpt["segmentation_net"])
+        tlm_optimizer.load_state_dict(ckpt["tlm_optimizer"])
+        seg_optimizer.load_state_dict(ckpt["seg_optimizer"])
+        global_step = ckpt["global_step"]
+        best_metrics = ckpt["best_metrics"]
+        print(f"  Resumed at epoch {global_step}/{args.steps} (best P-AUC(FA)={best_metrics.get('auc_fa', 0):.4f})")
+
     while flag:
         epoch_start = time.time()
         num_batches = len(dataloader)
@@ -188,12 +205,28 @@ def train(args, category, rotate_90=False, random_rotate=0, backbone_key=None):
                     "epoch": global_step,
                 }
 
+            # Save checkpoint after each evaluation so training can resume
+            torch.save({
+                "twostream": twostream.state_dict(),
+                "segmentation_net": segmentation_net.state_dict(),
+                "tlm_optimizer": tlm_optimizer.state_dict(),
+                "seg_optimizer": seg_optimizer.state_dict(),
+                "global_step": global_step,
+                "best_metrics": best_metrics,
+            }, ckpt_path)
+            print(f"  Checkpoint saved: epoch {global_step}/{args.steps}")
+
         if global_step >= args.steps:
             flag = False
             break
 
+    # Clean up checkpoint after successful completion
+    if os.path.exists(ckpt_path):
+        os.remove(ckpt_path)
+        print(f"  Checkpoint removed (training complete): {ckpt_path}")
+
     print(f"[{category}] Best FA results @ epoch {best_metrics.get('epoch', 'N/A')}: {best_metrics}")
-    return best_metrics
+    return best_metrics, twostream, segmentation_net
 
 
 def main():

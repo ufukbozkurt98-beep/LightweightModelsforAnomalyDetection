@@ -142,25 +142,27 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
 
 def print_summary_table(all_results, method, backbone):
     """Print a summary table of results across all categories."""
-    print(f"\n{'='*80}")
+    print(f"\n{'='*100}")
     print(f"  SUMMARY: {method.upper()} + {backbone}")
-    print(f"{'='*80}")
-    print(f"  {'Category':<14} {'Img AUROC':>10} {'Pix AUROC':>10} {'AUPRO':>10} {'ms/img':>10} {'FPS':>10}")
-    print(f"  {'-'*14} {'-'*10} {'-'*10} {'-'*10} {'-'*10} {'-'*10}")
+    print(f"{'='*100}")
+    print(f"  {'Category':<14} {'Img AUROC':>10} {'Pix AUROC':>10} {'AUPRO':>10} {'ms/img':>10} {'FPS':>10} {'GPU train':>10} {'GPU infer':>10}")
+    print(f"  {'-'*14} {'-'*10} {'-'*10} {'-'*10} {'-'*10} {'-'*10} {'-'*10} {'-'*10}")
 
     img_sum, pix_sum, pro_sum = 0.0, 0.0, 0.0
     count = 0
 
     for cat, m in all_results.items():
         if m is None:
-            print(f"  {cat:<14} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'N/A':>10}")
+            print(f"  {cat:<14} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'N/A':>10}")
             continue
         img = m.get("image_auroc", 0) * 100
         pix = m.get("pixel_auroc", 0) * 100
         pro = m.get("aupro_0.3", 0) * 100
         ms = m.get("inference_benchmark", {}).get("per_image_ms", 0)
         fps = m.get("inference_benchmark", {}).get("throughput_fps", 0)
-        print(f"  {cat:<14} {img:>9.2f}% {pix:>9.2f}% {pro:>9.2f}% {ms:>9.2f} {fps:>9.1f}")
+        gpu_train = m.get("gpu_train_mb", 0)
+        gpu_infer = m.get("gpu_infer_mb", 0)
+        print(f"  {cat:<14} {img:>9.2f}% {pix:>9.2f}% {pro:>9.2f}% {ms:>9.2f} {fps:>9.1f} {gpu_train:>8.0f}MB {gpu_infer:>8.0f}MB")
         img_sum += img
         pix_sum += pix
         pro_sum += pro
