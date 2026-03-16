@@ -4,7 +4,7 @@ from pathlib import Path
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-CATEGORY = "all"
+CATEGORY = "bottle"
 VAL_RATIO = 0.2
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
@@ -25,6 +25,6 @@ BACKBONE_KEY = "shufflenet_g3"  # ShuffleNet V1 g=3: paper's default (240/480/96
 #BACKBONE_KEY = "mobileformer_508m"  # MobileFormer 508M FLOPs (14.0M params)
 #BACKBONE_KEY = "mobileformer_294m"  # MobileFormer 294M FLOPs (11.4M params)
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
-METHOD = "fastflow"
+METHOD = "cflow"
 #METHOD = "simplenet"
 #METHOD = "stlm"
