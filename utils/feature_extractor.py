@@ -1,27 +1,3 @@
-"""Unified multi-scale feature extractors for lightweight backbones.
-
-This file implements Step (1) of the benchmark pipeline:
-extract intermediate backbone features in a consistent format so different
-anomaly-detection methods (CFLOW / FastFlow / GLASS / STLM / …) can reuse them.
-
-Conventions
------------
-* Input images: torch.Tensor shaped (B, 3, H, W)
-* Output features: dict with keys "l1", "l2", "l3" mapped to feature maps
-  shaped (B, C, H_i, W_i).
-
-Notes
------
-* For most backbones, we use `timm.create_model(..., features_only=True)`.
-  The timm docs explicitly support building feature backbones via
-  `features_only=True` and selecting levels with `out_indices`.
-* ShuffleNet-V2 is currently not provided by timm in many versions, so this
-  module includes a torchvision-based fallback.
-* Mobile-Former is *not* consistently available as a timm model. This module
-  includes a placeholder loader that you can wire to your Mobile-Former
-  implementation/checkpoint.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,87 +7,82 @@ import torch
 import torch.nn as nn
 
 
-# ---------------------------
-# Public configuration
-# ---------------------------
-
-
 @dataclass(frozen=True)
 class BackboneSpec:
-    """How to build a backbone and which feature levels to return."""
-
-    # One of: "timm", "torchvision", "custom"
+    # Where to get the model from
     source: str
-    # Model identifier for the chosen source (e.g., timm model name)
+    # Which specific model to use
     name: str
-    # For timm features_only: which feature indices to return
+    # Which feature layers to extract
     out_indices: Tuple[int, int, int] = (1, 2, 3)
 
 
 LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
-    # MobileNetV3 (timm)
+    # MobileNetV3
     "mobilenetv3_large": BackboneSpec(source="timm", name="mobilenetv3_large_100", out_indices=(1, 2, 3)),
     "mobilenetv3_small": BackboneSpec(source="timm", name="mobilenetv3_small_100", out_indices=(1, 2, 3)),
 
-    # EfficientNet-Lite (timm uses the TF port naming)
+    # EfficientNet-Lite
     "efficientnet_lite0": BackboneSpec(source="timm", name="tf_efficientnet_lite0", out_indices=(1, 2, 3)),
     "efficientnet_lite1": BackboneSpec(source="timm", name="tf_efficientnet_lite1", out_indices=(1, 2, 3)),
 
-    # MobileViT (timm)
+    # MobileViT
     "mobilevit_xxs": BackboneSpec(source="timm", name="mobilevit_xxs", out_indices=(1, 2, 3)),
     "mobilevit_xs": BackboneSpec(source="timm", name="mobilevit_xs", out_indices=(1, 2, 3)),
     "mobilevit_s": BackboneSpec(source="timm", name="mobilevit_s", out_indices=(1, 2, 3)),
 
-    # ShuffleNet-V2 (torchvision fallback; not consistently in timm)
-    "shufflenetv2_x1_0": BackboneSpec(source="torchvision", name="shufflenet_v2_x1_0"),
-    "shufflenetv2_x0_5": BackboneSpec(source="torchvision", name="shufflenet_v2_x0_5"),
+    # ShuffleNet V1 (official Megvii implementation)
+    "shufflenet_g3": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3"),
+    "shufflenet_g8": BackboneSpec(source="custom_shufflenet", name="shufflenet_g8"),
 
-    # Mobile-Former (custom; wire this to your implementation)
-    "mobileformer": BackboneSpec(source="custom", name="mobileformer"),
+    # MobileFormer (CVPR 2022)
+    "mobileformer_508m": BackboneSpec(source="custom_mobileformer", name="mobileformer_508m"),
+    "mobileformer_294m": BackboneSpec(source="custom_mobileformer", name="mobileformer_294m"),
+    "mobileformer_52m": BackboneSpec(source="custom_mobileformer", name="mobileformer_52m"),
 }
 
 
-# ---------------------------
-# Core extractor wrappers
-# ---------------------------
-
-
 class MultiScaleFeatureExtractor(nn.Module):
-    """Backbone wrapper that always returns {"l1","l2","l3"} feature maps."""
+    # Main feature extractor that wraps any backbone.
 
+    # Initialize the feature extractor.
     def __init__(
         self,
         spec: BackboneSpec,
         *,
         pretrained: bool = True,
         device: Optional[torch.device] = None,
+        tap_offset: int = 0,
     ) -> None:
         super().__init__()
         self.spec = spec
         self.pretrained = pretrained
 
+        # For different model other libraries or implementations can be used
         if spec.source == "timm":
             self._impl = _TimmFeaturesOnly(spec.name, out_indices=spec.out_indices, pretrained=pretrained)
-        elif spec.source == "torchvision":
-            self._impl = _TorchvisionShuffleNet(spec.name, pretrained=pretrained)
-        elif spec.source == "custom":
-            self._impl = _CustomMobileFormer(pretrained=pretrained)
+        elif spec.source == "custom_shufflenet":
+            self._impl = _ShuffleNetFeaturesOnly(spec.name)
+        elif spec.source == "custom_mobileformer":
+            self._impl = _MobileFormerFeaturesOnly(spec.name, tap_offset=tap_offset)
         else:
             raise ValueError(f"Unknown backbone source: {spec.source}")
 
         if device is not None:
             self.to(device)
 
+    # Extract features from images.
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         return self._impl(x)
 
     @property
     def feature_channels(self) -> Dict[str, int]:
-        """Channel counts for each returned level, if available."""
+        # Get the number of channels for each feature level.
         return getattr(self._impl, "feature_channels", {})
 
 
 class _TimmFeaturesOnly(nn.Module):
+    # Extract features using Timm library
     def __init__(self, model_name: str, *, out_indices: Tuple[int, int, int], pretrained: bool) -> None:
         super().__init__()
         try:
@@ -121,6 +92,7 @@ class _TimmFeaturesOnly(nn.Module):
                 "timm is required for timm-backed extractors. Install with: pip install timm"
             ) from e
 
+        # Create the backbone model
         self.backbone = timm.create_model(
             model_name,
             pretrained=pretrained,
@@ -128,145 +100,148 @@ class _TimmFeaturesOnly(nn.Module):
             out_indices=out_indices,
         )
 
-        # If timm exposes feature_info, keep channel metadata for logging.
+        # Will store {"l1": C1, "l2": C2, "l3": C3}
         self.feature_channels = {}
+
+        # Get feature info from timm model
         fi = getattr(self.backbone, "feature_info", None)
+
+        # feature_info.channels() returns channel counts matching the selected out_indices,
+        # NOT all feature levels. This is important because iterating `for f in fi`
+        # yields ALL feature levels regardless of out_indices.
         if fi is not None:
-            # feature_info is aligned with returned features (after out_indices)
             try:
-                chans = [f.get("num_chs") for f in fi]
-                self.feature_channels = {f"l{i+1}": int(c) for i, c in enumerate(chans) if c is not None}
+                chans = fi.channels()  # only selected out_indices
+                self.feature_channels = {f"l{i+1}": int(c) for i, c in enumerate(chans)}
             except Exception:
                 pass
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        # Extract features using the timm backbone.
         feats: List[torch.Tensor] = self.backbone(x)
         if len(feats) != 3:
             raise RuntimeError(
                 f"Expected 3 feature levels from timm backbone, got {len(feats)}. "
-                f"Try adjusting out_indices."
             )
         return {"l1": feats[0], "l2": feats[1], "l3": feats[2]}
 
 
-class _TorchvisionShuffleNet(nn.Module):
-    """ShuffleNet-V2 feature extraction via forward hooks.
+class _ShuffleNetFeaturesOnly(nn.Module):
+    """
+    Extract multi-scale features using ShuffleNet V1 (official Megvii implementation).
+    Returns {"l1", "l2", "l3"} from stage2, stage3, stage4.
 
-    Why hooks? Torchvision's feature_extraction utility is great, but users often
-    have different torchvision versions. Hooks are the most version-tolerant.
+    Pretrained ImageNet weights (official, from Megvii/Face++ paper authors, MIT license)
+    are loaded automatically if the checkpoint file exists in weights/ directory.
+
+    Download from: https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo
+    Source: https://github.com/megvii-model/ShuffleNet-Series (MIT license)
     """
 
-    def __init__(self, model_name: str, *, pretrained: bool) -> None:
+    # Map of model name -> (group, model_size, weight filename or None)
+    _CONFIGS = {
+        "shufflenet_g3":  (3, "1.0x", "shufflenet_g3.pth.tar"),
+        "shufflenet_g8":  (8, "1.0x", "shufflenet_g8.pth.tar"),
+    }
+
+    def __init__(self, model_name: str) -> None:
         super().__init__()
-        try:
-            import torchvision.models as tvm  # type: ignore
-        except Exception as e:  # pragma: no cover
-            raise ImportError(
-                "torchvision is required for ShuffleNet extractors. Install with: pip install torchvision"
-            ) from e
+        from pathlib import Path
+        from utils.shufflenet import ShuffleNetV1, load_pretrained_shufflenet
 
-        # Build model
-        build_fn = getattr(tvm, model_name, None)
-        if build_fn is None:
-            raise ValueError(f"torchvision.models has no model named '{model_name}'")
+        if model_name not in self._CONFIGS:
+            raise ValueError(
+                f"Unknown ShuffleNet config '{model_name}'. "
+                f"Available: {list(self._CONFIGS.keys())}"
+            )
 
-        # Newer torchvision uses Weights enums; keep it simple / compatible.
-        try:
-            self.model = build_fn(weights="DEFAULT" if pretrained else None)
-        except Exception:
-            self.model = build_fn(pretrained=pretrained)
+        group, model_size, weight_file = self._CONFIGS[model_name]
 
-        self.model.eval()
+        # n_class=0 disables the classifier head since we only need features
+        self.backbone = ShuffleNetV1(group=group, model_size=model_size, n_class=0)
 
-        # Register hooks at three progressively downsampled stages.
-        self._acts: Dict[str, torch.Tensor] = {}
-        self._handles = []
+        # Load pretrained weights if checkpoint file exists
+        if weight_file is not None:
+            weight_path = Path("weights") / weight_file
+            if weight_path.exists():
+                print(f"  Loading pretrained ShuffleNet weights from {weight_path}")
+                load_pretrained_shufflenet(self.backbone, str(weight_path))
+            else:
+                print(f"  WARNING: Pretrained weights not found at {weight_path}")
+                print(f"  ShuffleNet will use random initialization.")
+                print(f"  To use pretrained weights, download from official Megvii repo:")
+                print(f"    https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo")
+                print(f"  and save the {model_size} g={group} checkpoint as: {weight_path}")
 
-        # Common module names in torchvision ShuffleNetV2:
-        # conv1 -> maxpool -> stage2 -> stage3 -> stage4 -> conv5
-        # We'll tap: stage2, stage3, stage4.
-        for lvl, layer_name in enumerate(["stage2", "stage3", "stage4"], start=1):
-            layer = getattr(self.model, layer_name, None)
-            if layer is None:
-                raise RuntimeError(
-                    f"Couldn't find '{layer_name}' in ShuffleNet model. "
-                    "If your torchvision version differs, update the layer list."
-                )
-            self._handles.append(layer.register_forward_hook(self._make_hook(f"l{lvl}")))
-
-        # Channels depend on variant; we fill after first forward if you need.
-        self.feature_channels: Dict[str, int] = {}
-
-    def _make_hook(self, key: str):
-        def _hook(_m, _inp, out):
-            self._acts[key] = out
-        return _hook
+        # Store feature channel counts for each level (indices 2,3,4 = stage2,3,4)
+        self.feature_channels = {
+            f"l{i+1}": self.backbone.stage_out_channels[i + 2]
+            for i in range(3)
+        }
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        self._acts = {}
-        _ = self.model(x)
-        feats = {"l1": self._acts["l1"], "l2": self._acts["l2"], "l3": self._acts["l3"]}
-
-        if not self.feature_channels:
-            self.feature_channels = {k: int(v.shape[1]) for k, v in feats.items()}
-        return feats
-
-    def close(self) -> None:
-        for h in self._handles:
-            h.remove()
+        return self.backbone.forward_features(x)
 
 
-class _CustomMobileFormer(nn.Module):
-    """Stub for Mobile-Former.
-
-    Mobile-Former is not consistently available as a timm model.
-    Plug your implementation here (or add it as a submodule) and make sure
-    `forward()` returns {"l1","l2","l3"} feature maps.
+class _MobileFormerFeaturesOnly(nn.Module):
+    """
+    Extract multi-scale features using MobileFormer (CVPR 2022).
+    Returns {"l1", "l2", "l3"} from the first three stride-2 stages.
+    Pretrained ImageNet weights from the official repo.
     """
 
-    def __init__(self, *, pretrained: bool) -> None:
+    _CONFIGS = {
+        "mobileformer_508m",
+        "mobileformer_294m",
+        "mobileformer_52m",
+    }
+
+    def __init__(self, model_name: str, tap_offset: int = 0) -> None:
         super().__init__()
-        self.pretrained = pretrained
-        self._impl = None
+        from utils.mobileformer.mobile_former import _build_mobile_former
 
-    def _lazy_init(self) -> None:
-        if self._impl is not None:
-            return
+        if model_name not in self._CONFIGS:
+            raise ValueError(
+                f"Unknown MobileFormer config '{model_name}'. "
+                f"Available: {sorted(self._CONFIGS)}"
+            )
 
-        # Option A: if you vendored an implementation into your repo.
-        #   from models.mobileformer import mobileformer_294m
-        #   self._impl = mobileformer_294m(pretrained=self.pretrained)
-        #
-        # Option B: if you use a pip package.
-        #   import mobileformer
-        #   self._impl = mobileformer.create_model(...)
-        #
-        # For now we raise a clear error so the benchmark fails loudly.
-        raise ImportError(
-            "Mobile-Former backbone is marked as 'custom' in this project. "
-            "Please plug in a Mobile-Former implementation inside _CustomMobileFormer._lazy_init()."
-        )
+        # Always loads pretrained weights
+        self.backbone = _build_mobile_former(model_name)
+        if tap_offset > 0:
+            self.backbone.set_tap_offset(tap_offset)
+
+        # Store feature channel counts for each level
+        self.feature_channels = {
+            f"l{i+1}": c for i, c in enumerate(self.backbone.stage_out_channels)
+        }
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        self._lazy_init()
-        assert self._impl is not None
-        return self._impl(x)
-
-
-# ---------------------------
-# Small helper
-# ---------------------------
+        return self.backbone.forward_features(x)
 
 
 def build_extractor(
+    # create a feature extractor.
     backbone_key: str,
     *,
     pretrained: bool = True,
     device: Optional[torch.device] = None,
+    out_indices: Optional[Tuple[int, int, int]] = None,
 ) -> MultiScaleFeatureExtractor:
-    """Factory: build an extractor from LIGHTWEIGHT_BACKBONES."""
+
     if backbone_key not in LIGHTWEIGHT_BACKBONES:
         raise KeyError(
             f"Unknown backbone '{backbone_key}'. Available: {sorted(LIGHTWEIGHT_BACKBONES.keys())}"
         )
-    return MultiScaleFeatureExtractor(LIGHTWEIGHT_BACKBONES[backbone_key], pretrained=pretrained, device=device)
+    spec = LIGHTWEIGHT_BACKBONES[backbone_key]
+    tap_offset = 0
+    # Allow method-specific override of out_indices
+    # e.g. CFlow-AD original uses (2,3,4) to match paper's feature[-11,-5,-2] layers
+    if out_indices is not None:
+        if spec.source == "timm":
+            from dataclasses import replace
+            spec = replace(spec, out_indices=out_indices)
+        elif spec.source == "custom_mobileformer":
+            # out_indices=(2,3,4) means "use deeper features" → tap_offset=1
+            tap_offset = out_indices[0] - 1  # (2,3,4) → offset 1; (1,2,3) → offset 0
+    return MultiScaleFeatureExtractor(spec, pretrained=pretrained, device=device, tap_offset=tap_offset)
