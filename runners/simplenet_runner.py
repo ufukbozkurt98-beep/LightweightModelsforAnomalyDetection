@@ -88,6 +88,8 @@ def run_simplenet(train_loader, val_loader, test_loader, category=None):
     with torch.no_grad():
         feats = extractor(b["image"].to(device))
     print({k: tuple(v.shape) for k, v in feats.items()})
+    for k, v in feats.items():
+        print(f"{k}: mean={v.mean():.4f}, std={v.std():.4f}")
 
     b = next(iter(test_loader))
     print(b.keys())
