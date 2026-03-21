@@ -144,7 +144,7 @@ class MobileFormer(nn.Module):
     def __init__(
         self,
         block_args: List[list],
-        img_size: int = 224,
+        img_size: int = 256,
         width_mult: float = 1.0,
         in_chans: int = 3,
         stem_chs: int = 16,
