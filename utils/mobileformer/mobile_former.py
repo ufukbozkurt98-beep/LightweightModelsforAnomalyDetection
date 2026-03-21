@@ -91,41 +91,33 @@ _BLOCK_CLS = {
     "DnaBlock3": DnaBlock3,
 }
 
-# Google Drive file IDs for pretrained ImageNet weights
-_PRETRAINED_GDRIVE_IDS = {
-    "mobileformer_508m": "1bqLIcpbCaxK-Eb4wcxk0iJpFJ1nXfGuF",
-    "mobileformer_294m": "1JBSM7NJ60fN9TgT5sMnbhmbZwrzcBd0r",
-    "mobileformer_52m": "1ekq_FPl57gjIlYX16Ll0nBuEyB0pjgGt",
+# Weight filenames in weights/ directory
+_WEIGHT_FILES = {
+    "mobileformer_508m": "mobileformer_508m.pth",
+    "mobileformer_294m": "mobileformer_294m.pth",
+    "mobileformer_52m": "mobileformer_52m.pth",
 }
-
-_CACHE_DIR = Path.home() / ".cache" / "mobileformer"
 
 
 def _load_pretrained_weights(model: nn.Module, variant_name: str) -> None:
-    """Download pretrained weights from Google Drive and load into model."""
-    file_id = _PRETRAINED_GDRIVE_IDS.get(variant_name)
-    if file_id is None:
+    """Load pretrained weights from weights/ directory."""
+    weight_file = _WEIGHT_FILES.get(variant_name)
+    if weight_file is None:
         print(f"No pretrained weights available for {variant_name}")
         return
 
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cached_path = _CACHE_DIR / f"{variant_name}.pth"
+    weight_path = Path("weights") / weight_file
 
-    # Download if not cached
-    if not cached_path.exists():
-        try:
-            import gdown
-        except ImportError:
-            raise RuntimeError(
-                "gdown is required to download pretrained weights. "
-                "Install it with: pip install gdown"
-            )
-        url = f"https://drive.google.com/uc?id={file_id}"
-        print(f"Downloading {variant_name} pretrained weights...")
-        gdown.download(url, str(cached_path), quiet=False)
+    if not weight_path.exists():
+        print(f"  WARNING: Pretrained weights not found at {weight_path}")
+        print(f"  MobileFormer will use random initialization.")
+        print(f"  To use pretrained weights, download from official repo:")
+        print(f"    https://github.com/AAboys/MobileFormer")
+        print(f"  and save as: {weight_path}")
+        return
 
     # Load checkpoint
-    checkpoint = torch.load(cached_path, map_location="cpu", weights_only=False)
+    checkpoint = torch.load(weight_path, map_location="cpu", weights_only=False)
 
     # Handle different checkpoint formats
     if "state_dict" in checkpoint:
@@ -137,7 +129,7 @@ def _load_pretrained_weights(model: nn.Module, variant_name: str) -> None:
 
     # Load with strict=False to skip classifier/local_global keys
     result = model.load_state_dict(state_dict, strict=False)
-    print(f"Loaded pretrained weights for {variant_name}")
+    print(f"  Loading pretrained MobileFormer weights from {weight_path}")
     if result.missing_keys:
         print(f"  Missing keys (expected): {result.missing_keys}")
     if result.unexpected_keys:

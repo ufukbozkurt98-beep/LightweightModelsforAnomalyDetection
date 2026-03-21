@@ -1,6 +1,8 @@
 
 from runners.glass_runner import run_glass
 from runners.simplenet_runner import run_simplenet
+from runners.cflow_runner import run_cflow
+from runners.fastflow_runner import run_fastflow
 
 # from glass_src.glass import GLASS  # import the GLASS object from the glass.py file of glass_src package
 # --------------------------------
@@ -20,8 +22,6 @@ import torch
 
 from configs.config import BACKBONE_KEY
 
-from methods.cflow_train_and_test import train_and_test_cflow
-from methods.fastflow_train_and_test import train_and_test_fastflow
 
 
 ALL_MVTEC_CATEGORIES = [
@@ -95,7 +95,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
         run_simplenet(train_loader, val_loader, test_loader)
         return None
     elif METHOD.lower() == "cflow":
-        scores, maps, metrics = train_and_test_cflow(
+        scores, maps, metrics = run_cflow(
             train_loader=train_loader,
             test_loader=test_loader,
             backbone_name=BACKBONE_KEY,
@@ -115,7 +115,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
         )
         return metrics
     elif METHOD.lower() == "fastflow":
-        scores, maps, metrics = train_and_test_fastflow(
+        scores, maps, metrics = run_fastflow(
             train_loader=train_loader,
             test_loader=test_loader,
             backbone_name=BACKBONE_KEY,
