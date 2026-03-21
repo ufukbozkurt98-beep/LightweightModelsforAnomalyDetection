@@ -98,7 +98,7 @@ def run_glass(train_loader, val_loader, test_loader, category=None):
 
     # GLASS needs output folders (ckpt_dir/tb_dir)
     # using REPORTS_DIR so the path respects the config, consistent with simplenet
-    glass_runs_dir = str(REPORTS_DIR / "glass_runs")
+    glass_runs_dir = str(REPORTS_DIR / f"glass_runs_{BACKBONE_KEY}")
     glass.set_model_dir(glass_runs_dir, category)
 
     # avoiding the distribution==1 mode because of the risk of early training stopping
@@ -179,6 +179,6 @@ def run_glass(train_loader, val_loader, test_loader, category=None):
         "throughput_fps"  : latency["throughput_fps"],
     }
 
-    out_path = results_dir / f"{category}_glass_results.json"
+    out_path = results_dir / f"{category}_glass_{BACKBONE_KEY}_results.json"
     out_path.write_text(json.dumps(category_result, indent=2))
     print(f"  [saved → {out_path}]")
