@@ -65,7 +65,7 @@ def main():
     if RUN_ALL:
         # ── loop over every category ──────────────────────────────────────────
         for cat in ALL_CATEGORIES:
-            result_file = REPORTS_DIR / "benchmark_results" / f"{cat}_{METHOD.lower()}_results.json"
+            result_file = REPORTS_DIR / "benchmark_results" / f"{cat}_{METHOD.lower()}_{BACKBONE_KEY}_results.json"
             if result_file.exists():
                 print(f"Skipping {cat} — already done")
                 continue
