@@ -25,10 +25,10 @@ ALL_CATEGORIES = [
 
 BACKBONES = [
     "mobilenetv3_large",
-    "efficientnet_lite1",
-    "mobilevit_s",
-    "shufflenet_g3",
-    "mobileformer_508m",
+    # "efficientnet_lite1",
+    # "mobilevit_s",
+    # "shufflenet_g3",
+    # "mobileformer_508m",
 ]
 
 CFLOW_OUT_INDICES = (2, 3, 4)

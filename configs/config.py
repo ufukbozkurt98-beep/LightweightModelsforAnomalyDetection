@@ -4,7 +4,7 @@ from pathlib import Path
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-CATEGORY = "bottle"
+CATEGORY = "all"
 VAL_RATIO = 0.2
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
@@ -15,7 +15,7 @@ NUM_WORKERS = 4
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
 DTD_ZIP_PATH = Path("./data/dtd-r1.0.1.tar.gz")  # DTD archive (tar.gz or zip)
 DTD_ROOT = Path("./data/dtd")  # extracted DTD root
-BACKBONE_KEY = "mobilenetv3_large"
+BACKBONE_KEY = "mobilenetv3_large"  # active backbone
 #BACKBONE_KEY = "mobilenetv3_small"
 #BACKBONE_KEY = "mobilevit_s"
 #BACKBONE_KEY = "efficientnet_lite0"
@@ -25,6 +25,6 @@ BACKBONE_KEY = "mobilenetv3_large"
 #BACKBONE_KEY = "mobileformer_508m"  # MobileFormer 508M FLOPs (14.0M params)
 #BACKBONE_KEY = "mobileformer_294m"  # MobileFormer 294M FLOPs (11.4M params)
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
-METHOD = "stlm"
+METHOD = "cflow"
 #METHOD = "simplenet"
 #METHOD = "stlm"
