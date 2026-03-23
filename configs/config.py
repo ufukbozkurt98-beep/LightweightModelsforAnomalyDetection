@@ -17,8 +17,9 @@ DTD_ZIP_PATH = Path("./data/dtd-r1.0.1.tar.gz")  # DTD archive (tar.gz or zip)
 DTD_ROOT = Path("./data/dtd")  # extracted DTD root
 #BACKBONE_KEY = "mobilenetv3_large"  # active backbone
 #BACKBONE_KEY = "mobilenetv3_small"
+BACKBONE_KEY = "shufflenet_g3"
 #BACKBONE_KEY = "mobilevit_s"
-BACKBONE_KEY = "efficientnet_lite1"
+#BACKBONE_KEY = "efficientnet_lite1"
 #BACKBONE_KEY = "shufflenet_g1"  # ShuffleNet V1 g=1: baseline (144/288/576 ch)
 #BACKBONE_KEY = "shufflenet_g3"  # ShuffleNet V1 g=3: paper's default (240/480/960 ch)
 #BACKBONE_KEY = "shufflenet_g8"  # ShuffleNet V1 g=8: most aggressive (384/768/1536 ch)
