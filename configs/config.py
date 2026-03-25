@@ -22,7 +22,7 @@ BACKBONE_KEY = "mobilevit_xs"
 #BACKBONE_KEY = "efficientnet_lite1"
 #BACKBONE_KEY = "shufflenet_g1"  # ShuffleNet V1 g=1: baseline (144/288/576 ch)
 #BACKBONE_KEY = "shufflenet_g3"  # ShuffleNet V1 g=3: paper's default (240/480/960 ch)
-#BACKBONE_KEY = "shufflenet_g8"  # ShuffleNet V1 g=8: most aggressive (384/768/1536 ch)
+BACKBONE_KEY = "shufflenet_g8"  # ShuffleNet V1 g=8: most aggressive (384/768/1536 ch)
 #BACKBONE_KEY = "mobileformer_508m"  # MobileFormer 508M FLOPs (14.0M params)
 #BACKBONE_KEY = "mobileformer_294m"  # MobileFormer 294M FLOPs (11.4M params)
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
