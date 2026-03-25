@@ -1,106 +1,117 @@
+"""
+FastFlow method — backbone-agnostic wrapper around the anomalib core.
+
+The core algorithm (subnet_conv_func, create_fast_flow_block, FastflowLoss,
+AnomalyMapGenerator) lives in fastflow_core.py and is the exact anomalib code.
+
+This file adds:
+  - Backbone-agnostic integration via MultiScaleFeatureExtractor
+  - fit() / predict() / measure_fps() training loop
+  - Enhancement toggles (all OFF by default = vanilla anomalib):
+      * zero_init      — zero-initialize last conv in coupling subnets
+      * gauss_sigma    — Gaussian smoothing on anomaly map
+      * use_scheduler  — cosine annealing LR schedule
+      * channel_cap    — 1x1 conv channel reduction for wide backbones
+"""
+
 import copy
-import math
-import numpy as np
+import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# to build normalizing flows
-import FrEIA.framework as Ff
-import FrEIA.modules as Fm
-
 from utils.data_adapters import TupleLoader
 
+# ── anomalib-exact core (fastflow_core.py) ────────────────────────────
+from methods.fastflow_core import (
+    subnet_conv_func as _anomalib_subnet_conv_func,
+    create_fast_flow_block as _anomalib_create_fast_flow_block,
+    FastflowLoss,
+    AnomalyMapGenerator as _AnomalyMapGenerator,
+)
 
-def subnet_conv_func(kernel_size, hidden_ratio, zero_init=True):
-    """
-    This builds the small sub-network used inside coupling blocks
-    It returns a function that builds a small nn.Sequential
-    """
 
+# ======================================================================
+# Enhancement wrappers — these extend the anomalib core with toggleable
+# features. When enhancements are OFF, the exact anomalib code runs.
+# ======================================================================
+
+def subnet_conv_func(kernel_size, hidden_ratio, zero_init=False):
+    """
+    Wrapper around anomalib's subnet_conv_func.
+    When zero_init=False (default), returns the exact anomalib subnet.
+    When zero_init=True, additionally zero-initializes the last conv layer.
+    """
+    if not zero_init:
+        # Exact anomalib code path — no modifications
+        return _anomalib_subnet_conv_func(kernel_size, hidden_ratio)
+
+    # Enhancement: zero-init last conv so the flow starts as identity
     def subnet_conv(in_channels, out_channels):
-        """"
-        Inner builder: creates the subnet given input/output channels
-        """
-        # Hidden channel count
         hidden_channels = int(in_channels * hidden_ratio)
-        # Padding to keep spatial size for 3×3.
-        padding = kernel_size // 2
-        # Subnet: Conv → ReLU → Conv
-        last_conv = nn.Conv2d(hidden_channels, out_channels, kernel_size, padding=padding)
-        # Zero-init last conv so the flow starts as identity (enhancement)
-        if zero_init:
-            nn.init.zeros_(last_conv.weight)
-            nn.init.zeros_(last_conv.bias)
+        padding_dims = (kernel_size // 2 - ((1 + kernel_size) % 2), kernel_size // 2)
+        padding = (*padding_dims, *padding_dims)
+        last_conv = nn.Conv2d(hidden_channels, out_channels, kernel_size)
+        nn.init.zeros_(last_conv.weight)
+        nn.init.zeros_(last_conv.bias)
         return nn.Sequential(
-            nn.Conv2d(in_channels, hidden_channels, kernel_size, padding=padding),
+            nn.ZeroPad2d(padding),
+            nn.Conv2d(in_channels, hidden_channels, kernel_size),
             nn.ReLU(),
+            nn.ZeroPad2d(padding),
             last_conv,
         )
-
     return subnet_conv
 
 
-def create_fast_flow_block(input_dimensions, conv3x3_only, hidden_ratio, flow_steps, clamp=2.0, zero_init=True):
+def create_fast_flow_block(input_dimensions, conv3x3_only, hidden_ratio,
+                           flow_steps, clamp=2.0, zero_init=False):
     """
-    Builds a flow for a feature map
+    Wrapper around anomalib's create_fast_flow_block.
+    When zero_init=False (default), calls the exact anomalib function.
+    When zero_init=True, uses our enhanced subnet_conv_func.
     """
-    # Creates an invertible sequence
-    nodes = Ff.SequenceINN(*input_dimensions)
-    for i in range(flow_steps):
-        # Alternate kernel for even steps it is 3x3, for odd steps it is1x1
-        # if conv3x3_only is True, then always 3x3
-        kernel_size = 1 if i % 2 == 1 and not conv3x3_only else 3
+    if not zero_init:
+        # Exact anomalib code path
+        return _anomalib_create_fast_flow_block(
+            input_dimensions, conv3x3_only, hidden_ratio, flow_steps, clamp
+        )
 
-        # Appends an invertible
+    # Enhancement path: build with zero-init subnets
+    from FrEIA.framework import SequenceINN
+    from FrEIA.modules import AllInOneBlock
+    nodes = SequenceINN(*input_dimensions)
+    for i in range(flow_steps):
+        kernel_size = 1 if i % 2 == 1 and not conv3x3_only else 3
         nodes.append(
-            Fm.AllInOneBlock,
-            # Use subnet function for the coupling subnet
-            subnet_constructor=subnet_conv_func(kernel_size, hidden_ratio, zero_init),
-            # Clamping for stability
+            AllInOneBlock,
+            subnet_constructor=subnet_conv_func(kernel_size, hidden_ratio, zero_init=True),
             affine_clamping=clamp,
-            # Controls permutation behavior in the block
             permute_soft=False,
         )
-    return nodes  # Returns the built invertible sequence
-
-
-class FastflowLoss(nn.Module):
-    """
-    FastFlow loss function.
-    """
-
-    @staticmethod
-    def forward(hidden_variables, jacobians):
-        # Initializes loss on correct device
-        loss = torch.tensor(0.0, device=hidden_variables[0].device)
-        # Loop over scales
-        for hidden_variable, jacobian in zip(hidden_variables, jacobians):
-            # Standard flow negative log-likelihood term
-            loss += torch.mean(
-                0.5 * torch.sum(hidden_variable ** 2, dim=(1, 2, 3)) - jacobian
-            )
-        return loss
+    return nodes
 
 
 class AnomalyMapGenerator(nn.Module):
     """
-    Anomaly map generator
-    Generates pixel-level anomaly heatmap with optional Gaussian smoothing
+    Anomaly map generator with optional Gaussian smoothing enhancement.
+    When sigma=0.0 (default), delegates entirely to the anomalib core.
+    When sigma>0.0, applies Gaussian post-processing smoothing.
     """
 
-    def __init__(self, input_size, sigma=4.0):
+    def __init__(self, input_size, sigma=0.0):
         super().__init__()
-        # check input size is a tuple
-        self.input_size = tuple(input_size) if not isinstance(input_size, tuple) else input_size
-        # Store Gaussian kernel as a buffer for post-processing smoothing (enhancement)
         self.sigma = sigma
+        # The core anomalib generator (always used)
+        self._core = _AnomalyMapGenerator(input_size)
+        # Enhancement: Gaussian kernel for smoothing
         if sigma > 0:
             self.register_buffer("_gauss_kernel", self._make_gaussian_kernel(sigma))
 
     @staticmethod
     def _make_gaussian_kernel(sigma, channels=1):
-        """Builds fixed 2D Gaussian filter"""
+        """Builds fixed 2D Gaussian filter."""
         kernel_size = 2 * int(4.0 * sigma + 0.5) + 1
         x = torch.arange(kernel_size, dtype=torch.float32) - kernel_size // 2
         gauss_1d = torch.exp(-0.5 * (x / sigma) ** 2)
@@ -109,36 +120,30 @@ class AnomalyMapGenerator(nn.Module):
         return gauss_2d.view(1, 1, kernel_size, kernel_size).repeat(channels, 1, 1, 1)
 
     def forward(self, hidden_variables):
-        # Collect per-scale maps
-        flow_maps = []
-        # Iterate scales
-        for hidden_variable in hidden_variables:
-            # Computes log-prob proxy from latent energy
-            log_prob = -torch.mean(hidden_variable ** 2, dim=1, keepdim=True) * 0.5
-            # Exponentiates to get probability
-            prob = torch.exp(log_prob)
-            # Uses prob as anomaly score map and upsamples to input resolution
-            flow_map = F.interpolate(
-                input=-prob,
-                size=self.input_size,
-                mode="bilinear",
-                align_corners=False,
-            )
-            flow_maps.append(flow_map)
-        # Stack and average across scales
-        flow_maps = torch.stack(flow_maps, dim=-1)
-        anomaly_map = torch.mean(flow_maps, dim=-1)
-
-        # Gaussian smoothing to reduce pixel-level noise (enhancement)
+        # Core anomalib anomaly map
+        anomaly_map = self._core(hidden_variables)
+        # Enhancement: Gaussian smoothing
         if self.sigma > 0:
             pad = self._gauss_kernel.shape[-1] // 2
             anomaly_map = F.pad(anomaly_map, (pad, pad, pad, pad), mode="reflect")
             anomaly_map = F.conv2d(anomaly_map, self._gauss_kernel, groups=1)
         return anomaly_map
 
+
+# ======================================================================
+# FastFlowMethod — backbone-agnostic training/inference wrapper
+# ======================================================================
+
 class FastFlowMethod:
     """
-    Main method class with fit() / predict()
+    Main method class with fit() / predict() / measure_fps().
+
+    When all enhancement toggles are off (default), this runs the exact
+    anomalib FastFlow algorithm. Enhancements are bound to parameters:
+      zero_init=False       → anomalib (no zero-init)
+      gauss_sigma=0.0       → anomalib (no smoothing)
+      use_scheduler=False   → anomalib (no LR schedule)
+      channel_cap=None      → anomalib (no channel reduction)
     """
     def __init__(
             self,
@@ -153,10 +158,10 @@ class FastFlowMethod:
             meta_epochs=50,
             weight_decay=1e-5,
             verbose=True,
-            # Enhancement toggles (set to False/0.0 to match vanilla anomalib)
-            zero_init=True,
-            gauss_sigma=4.0,
-            use_scheduler=True,
+            # Enhancement toggles (default=off matches vanilla anomalib)
+            zero_init=False,
+            gauss_sigma=0.0,
+            use_scheduler=False,
             channel_cap=None,
     ):
         # Moves extractor to device and sets eval mode and freeze it
@@ -203,7 +208,7 @@ class FastFlowMethod:
         image, _, _ = next(iter(TupleLoader(train_loader)))
         image = image.to(self.device)
 
-        # Extract features without gradients (l1,l2,l2)
+        # Extract features without gradients (l1,l2,l3)
         with torch.no_grad():
             feats = self.extractor(image)
 
@@ -218,6 +223,7 @@ class FastFlowMethod:
 
         # Channel reducers for wide-channel backbones (e.g. ShuffleNet 240/480/960)
         # Trainable 1x1 conv + BN that project to lower dimension before the NF
+        # Enhancement: when channel_cap=None, all reducers are nn.Identity() (no effect)
         self.reducers = nn.ModuleList()
         for i in range(len(channels)):
             C = channels[i]
@@ -233,7 +239,7 @@ class FastFlowMethod:
                 self.reducers.append(nn.Identity())
         self.reducers = self.reducers.to(self.device)
 
-        # LayerNorm per feature scale for stability (uses reduced channels)
+        # LayerNorm per feature scale (anomalib-exact: elementwise_affine=True)
         self.norms = nn.ModuleList()
         for i, key in enumerate(["l1", "l2", "l3"]):
             C = channels[i]
@@ -244,6 +250,7 @@ class FastFlowMethod:
         self.norms = self.norms.to(self.device)
 
         # 2D normalizing flow block per feature scale
+        # When zero_init=False, this calls the exact anomalib create_fast_flow_block
         self.fast_flow_blocks = nn.ModuleList()
         for i in range(len(channels)):
             C = channels[i]
@@ -260,13 +267,13 @@ class FastFlowMethod:
             )
         self.fast_flow_blocks = self.fast_flow_blocks.to(self.device)
 
-        # Optimize NF block, LayerNorm, and reducer parameters. Backbone is still frozen.
+        # Anomalib-exact: Adam(lr=0.001, weight_decay=1e-5)
         params = (list(self.fast_flow_blocks.parameters())
                   + list(self.norms.parameters())
                   + list(self.reducers.parameters()))
         self.optimizer = torch.optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
 
-        # Cosine annealing: LR decays smoothly from lr to near-zero over all epochs (enhancement)
+        # Enhancement: cosine annealing LR schedule (not in anomalib)
         if self.use_scheduler:
             self.scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
                 self.optimizer, T_0=self.meta_epochs, eta_min=self.lr * 1e-3
@@ -300,7 +307,7 @@ class FastFlowMethod:
         self.norms.load_state_dict(self._best_norms_state)
         self.fast_flow_blocks.load_state_dict(self._best_blocks_state)
 
-    def fit(self, train_loader, eval_fn=None, eval_every=10):
+    def fit(self, train_loader, eval_fn=None, eval_every=10, early_stopping_patience=0):
         """
         Train FastFlow on normal images.
 
@@ -309,6 +316,9 @@ class FastFlowMethod:
             eval_fn: Optional callable returning a scalar metric (higher=better).
                      Called every `eval_every` epochs; best model is restored at end.
             eval_every: How often (in epochs) to run eval_fn. Default 10.
+            early_stopping_patience: Stop training if the monitored metric does not
+                     improve for this many evaluation rounds. 0 = disabled.
+                     Anomalib default config uses patience=3.
         """
         if self.fast_flow_blocks is None:
             self._build(train_loader)
@@ -318,6 +328,7 @@ class FastFlowMethod:
         self._best_epoch = -1
         self._best_norms_state = None
         self._best_blocks_state = None
+        no_improve_count = 0  # for early stopping
 
         # Wrap loader and set modules to train mode.
         train_loader_t = TupleLoader(train_loader)
@@ -350,10 +361,10 @@ class FastFlowMethod:
                     hidden_variables.append(hidden_variable)
                     log_jacobians.append(log_jacobian)
 
-                # compute loss
+                # compute loss (anomalib-exact FastflowLoss)
                 loss = self.criterion(hidden_variables, log_jacobians)
 
-                # Backprop
+                # Backprop (anomalib-exact: no gradient clipping)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -361,7 +372,7 @@ class FastFlowMethod:
                 epoch_loss += loss.item()
                 batch_count += 1
 
-            # Step cosine annealing scheduler (enhancement)
+            # Enhancement: cosine annealing scheduler step
             if self.scheduler is not None:
                 self.scheduler.step(epoch)
 
@@ -375,7 +386,7 @@ class FastFlowMethod:
                     )
                 )
 
-            # Periodic evaluation for best-epoch selection
+            # Periodic evaluation for best-epoch selection + early stopping
             if eval_fn is not None and (epoch + 1) % eval_every == 0:
                 self.reducers.eval()
                 self.norms.eval()
@@ -396,6 +407,15 @@ class FastFlowMethod:
                     self._best_metric = metric
                     self._best_epoch = epoch
                     self._save_best_state()
+                    no_improve_count = 0
+                else:
+                    no_improve_count += 1
+                # Early stopping (anomalib default config: patience=3, monitor=pixel_AUROC)
+                if early_stopping_patience > 0 and no_improve_count >= early_stopping_patience:
+                    if self.verbose:
+                        print(f"\n  Early stopping at epoch {epoch}: no improvement "
+                              f"for {no_improve_count} eval rounds (patience={early_stopping_patience})")
+                    break
                 self.reducers.train()
                 self.norms.train()
                 self.fast_flow_blocks.train()
@@ -413,10 +433,9 @@ class FastFlowMethod:
         self.fast_flow_blocks.eval()
 
 
-
     @torch.no_grad()
     def predict(self, test_loader):
-        """Compute anomaly scores and maps for the test"""
+        """Compute anomaly scores and maps for the test."""
         if self.fast_flow_blocks is None:
             raise RuntimeError("Call fit() first.")
 
@@ -436,7 +455,7 @@ class FastFlowMethod:
             feats = self.extractor(image)
             features = [feats["l1"], feats["l2"], feats["l3"]]
 
-            # Forward through reducers + NF blocks
+            # Forward through reducers + norms + NF blocks
             hidden_variables = []
             for i, feature in enumerate(features):
                 feature = self.reducers[i](feature)
@@ -444,10 +463,10 @@ class FastFlowMethod:
                 hidden_variable, _log_jacobian = self.fast_flow_blocks[i](feature)
                 hidden_variables.append(hidden_variable)
 
-            # Generate anomaly map
+            # Generate anomaly map (uses anomalib core, optionally with Gaussian smoothing)
             anomaly_map = self.anomaly_map_generator(hidden_variables)  # (B, 1, H, W)
 
-            # Image-level score, max value in the anomaly map
+            # Image-level score: max value in the anomaly map (anomalib-exact)
             pred_score = torch.amax(anomaly_map, dim=(-2, -1))
             pred_score = pred_score.squeeze(1)
 
@@ -468,8 +487,6 @@ class FastFlowMethod:
         (NF + anomaly map only, excluding backbone) as well as encoder-only
         and full pipeline FPS.
         """
-        import time
-
         if self.fast_flow_blocks is None:
             raise RuntimeError("Call fit() first.")
 
@@ -506,8 +523,6 @@ class FastFlowMethod:
         time_enc = time.time() - t0
 
         # 3) "Additional inference time" (NF + anomaly map only, no backbone)
-        #    This is what the FastFlow paper reports — the overhead on top of backbone.
-        #    Pre-extract features, then time only the NF + map part.
         cached_features = []
         for image, _, _ in test_loader_t:
             image = image.to(self.device)

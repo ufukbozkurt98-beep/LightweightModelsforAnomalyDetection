@@ -30,11 +30,14 @@ def run_fastflow(
     weight_decay: float = 1e-5,
     input_size: int = 256,
     backbone_bench: dict | None = None,
-    # Enhancement toggles
-    zero_init: bool = True,
-    gauss_sigma: float = 4.0,
-    use_scheduler: bool = True,
+    # Enhancement toggles (default=off matches vanilla anomalib)
+    zero_init: bool = False,
+    gauss_sigma: float = 0.0,
+    use_scheduler: bool = False,
     channel_cap: int | None = None,
+    best_metric: str = "none",  # "none" = no best-epoch, "pixel" = original anomalib, "combined" = (img+pix)/2
+    eval_every: int = 1,  # anomalib validates every epoch (1); increase to reduce overhead
+    early_stopping_patience: int = 0,  # 0=disabled, anomalib default config uses 3 (monitor=pixel_AUROC)
 ):
     """
     Train and test FastFlow, return scores, anomaly maps and metrics.
@@ -75,17 +78,24 @@ def run_fastflow(
     # Collect ground truth early so eval_fn can use it during training
     y_img, y_pix = collect_gt_from_loader(test_loader)
 
-    # Build eval callback: combined (image + pixel) AUROC for best-epoch selection
+    # Build eval callback for best-epoch selection
+    # "pixel" = original anomalib (selects by pixel AUROC)
+    # "combined" = our enhancement (selects by (img+pix)/2)
+    # "none" = no best-epoch selection (use final weights)
     def _eval_fn():
         scores, maps = fastflow.predict(test_loader)
         pix = pixel_level_auroc(y_pix, maps)
         img = image_level_auroc(y_img, scores)
-        combined = (img + pix) / 2
-        return combined, img, pix
+        if best_metric == "pixel":
+            return pix, img, pix
+        else:  # "combined"
+            return (img + pix) / 2, img, pix
 
     # Train with GPU memory tracking
     reset_gpu_peak(dev)
-    fastflow.fit(train_loader, eval_fn=_eval_fn, eval_every=10)
+    eval_fn = _eval_fn if best_metric != "none" else None
+    fastflow.fit(train_loader, eval_fn=eval_fn, eval_every=eval_every,
+                 early_stopping_patience=early_stopping_patience)
     gpu_train_mb = measure_gpu_memory_mb(dev)
 
     # Predict with inference latency measurement
