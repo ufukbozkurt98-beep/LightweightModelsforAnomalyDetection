@@ -136,7 +136,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             channel_cap=channel_cap,
             best_metric="pixel",  # "none" = no eval, "pixel" = select best epoch by pixel_AUROC, "combined" = (img+pix)/2
             eval_every=1,  # check best epoch every 10 epochs
-            early_stopping_patience=20,  # 0=disabled, train full 500 epochs (paper doesn't use early stopping)
+            early_stopping_patience=25,  # 0=disabled, train full 500 epochs (paper doesn't use early stopping)
         )
         return metrics
     else:

@@ -79,17 +79,19 @@ def run_fastflow(
     y_img, y_pix = collect_gt_from_loader(test_loader)
 
     # Build eval callback for best-epoch selection
-    # "pixel" = original anomalib (selects by pixel AUROC)
-    # "combined" = our enhancement (selects by (img+pix)/2)
+    # Returns (selection_metric, img, pix) — selection_metric decides best epoch
+    # "pixel" = select by pixel AUROC (original anomalib behavior)
+    # "combined" = select by (img+pix)/2
     # "none" = no best-epoch selection (use final weights)
     def _eval_fn():
         scores, maps = fastflow.predict(test_loader)
         pix = pixel_level_auroc(y_pix, maps)
         img = image_level_auroc(y_img, scores)
-        if best_metric == "pixel":
-            return pix, img, pix
-        else:  # "combined"
-            return (img + pix) / 2, img, pix
+        if best_metric == "combined":
+            selection = (img + pix) / 2
+        else:  # "pixel"
+            selection = pix
+        return selection, img, pix
 
     # Train with GPU memory tracking
     reset_gpu_peak(dev)
