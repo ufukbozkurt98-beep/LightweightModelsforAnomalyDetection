@@ -1,6 +1,6 @@
 """
 Run FastFlow on all 15 MVTec-AD categories for 5 lightweight backbones.
-Results are saved per backbone, with resume support (skips already-done categories).
+After all backbones are done, prints all 5 summary tables together.
 
 Usage:
     python run_fastflow_all.py
@@ -20,7 +20,9 @@ BACKBONES = [
 ]
 
 if __name__ == "__main__":
-    from main import main
+    from main import main, print_summary_table
+
+    all_backbone_results = {}
 
     for backbone in BACKBONES:
         print(f"\n{'*'*80}")
@@ -30,6 +32,13 @@ if __name__ == "__main__":
         # Patch config for this backbone
         cfg.BACKBONE_KEY = backbone
 
-        main()
+        results = main()
+        all_backbone_results[backbone] = results
 
-        print(f"\n  ✓ Done: {backbone}\n")
+    # Print all 5 summary tables together at the end
+    print(f"\n{'#'*100}")
+    print(f"  ALL FASTFLOW RESULTS")
+    print(f"{'#'*100}")
+    for backbone, results in all_backbone_results.items():
+        if results:
+            print_summary_table(results, "fastflow", backbone)
