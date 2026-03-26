@@ -10,7 +10,7 @@ import json
 from pathlib import Path  # to enable to use path objects and /|\ handling
 
 from configs.config import (
-    MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH,  METHOD, VAL_RATIO_CFLOW,
+    MVTEC_ROOT, REPORTS_DIR, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, VAL_RATIO_CFLOW,
     DTD_ZIP_PATH, DTD_ROOT
 )
 
@@ -20,7 +20,7 @@ from utils.data_loader import make_loader_mvtec_ad
 
 import torch
 
-from configs.config import BACKBONE_KEY
+import configs.config as cfg
 
 
 
@@ -36,8 +36,8 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
     split_json = REPORTS_DIR / f"mvtec_{category}_split.json"
 
     # dataset check and train/val split (STLM handles its own data)
-    if METHOD.lower() not in ("stlm",):
-        val_ratio = VAL_RATIO_CFLOW if METHOD.lower() in ("cflow", "fastflow") else VAL_RATIO
+    if cfg.METHOD.lower() not in ("stlm",):
+        val_ratio = VAL_RATIO_CFLOW if cfg.METHOD.lower() in ("cflow", "fastflow") else VAL_RATIO
         scan_and_split(
             mvtec_root=Path(data_root),
             out_dir=REPORTS_DIR,
@@ -47,7 +47,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
         )
 
     # STLM has its own data loading
-    if METHOD.lower() == "stlm":
+    if cfg.METHOD.lower() == "stlm":
         dtd_images_dir = DTD_ROOT / "images"
         if not dtd_images_dir.exists():
             import tarfile, zipfile
@@ -70,35 +70,35 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             dtd_path=str(DTD_ROOT / "images") + "/",
             mobile_sam_path="./weights/mobile_sam.pt",
             sam_vit_h_path="./weights/sam_vit_h_4b8939.pth",
-            backbone_key=BACKBONE_KEY,
+            backbone_key=cfg.BACKBONE_KEY,
             backbone_bench=backbone_bench,
         )
         return metrics
 
     # Build data loaders
     # CFlow-AD original uses RandomRotation(5) and drop_last=True for training
-    is_cflow = METHOD.lower() == "cflow"
+    is_cflow = cfg.METHOD.lower() == "cflow"
     train_loader = make_loader_mvtec_ad(Path(data_root), category, "train", split_json,
                                         input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE,
                                         rotate_deg=5.0 if is_cflow else 0.0,
                                         drop_last_train=True if is_cflow else False)
-    if METHOD.lower() not in ("cflow", "fastflow"):
+    if cfg.METHOD.lower() not in ("cflow", "fastflow"):
         val_loader = make_loader_mvtec_ad(Path(data_root), category, "val", split_json,
                                           input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
     test_loader = make_loader_mvtec_ad(Path(data_root), category, "test", split_json,
                                        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
 
-    if METHOD.lower() == "glass":
+    if cfg.METHOD.lower() == "glass":
         run_glass(train_loader, val_loader, test_loader)
         return None
-    elif METHOD.lower() == "simplenet":
+    elif cfg.METHOD.lower() == "simplenet":
         run_simplenet(train_loader, val_loader, test_loader)
         return None
-    elif METHOD.lower() == "cflow":
+    elif cfg.METHOD.lower() == "cflow":
         scores, maps, metrics = run_cflow(
             train_loader=train_loader,
             test_loader=test_loader,
-            backbone_name=BACKBONE_KEY,
+            backbone_name=cfg.BACKBONE_KEY,
             device=device,
             coupling_blocks=8,
             condition_vec=128,
@@ -114,11 +114,11 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             channel_cap=channel_cap,
         )
         return metrics
-    elif METHOD.lower() == "fastflow":
+    elif cfg.METHOD.lower() == "fastflow":
         scores, maps, metrics = run_fastflow(
             train_loader=train_loader,
             test_loader=test_loader,
-            backbone_name=BACKBONE_KEY,
+            backbone_name=cfg.BACKBONE_KEY,
             device=device,
             flow_steps=8,
             conv3x3_only=True,  # paper uses True for smaller backbones (ResNet18 etc.)
@@ -140,7 +140,7 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
         )
         return metrics
     else:
-        raise ValueError(f"Unknown METHOD: {METHOD}")
+        raise ValueError(f"Unknown cfg.METHOD: {cfg.METHOD}")
 
 
 def print_summary_table(all_results, method, backbone):
@@ -187,22 +187,22 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Determine categories to run
-    if CATEGORY.lower() == "all":
+    if cfg.CATEGORY.lower() == "all":
         categories = ALL_MVTEC_CATEGORIES
     else:
-        categories = [CATEGORY]
+        categories = [cfg.CATEGORY]
 
     # CFlow-AD original paper uses deeper feature layers: features[-11,-5,-2]
     # which corresponds to out_indices=(2,3,4) in timm → 32×32, 16×16, 8×8
-    cflow_out_indices = (2, 3, 4) if METHOD.lower() == "cflow" else None
+    cflow_out_indices = (2, 3, 4) if cfg.METHOD.lower() == "cflow" else None
 
     # Auto-detect channel_cap for wide-channel backbones (e.g. ShuffleNet 240/480/960).
     # NF-based methods (CFlow, FastFlow) struggle with >256 channels per scale.
     # Adds a 1x1 conv to reduce channels before the normalizing flow.
     channel_cap = None
-    if METHOD.lower() in ("cflow", "fastflow"):
+    if cfg.METHOD.lower() in ("cflow", "fastflow"):
         from utils.feature_extractor import build_extractor as _be
-        _tmp = _be(BACKBONE_KEY, pretrained=False)
+        _tmp = _be(cfg.BACKBONE_KEY, pretrained=False)
         max_ch = max(_tmp.feature_channels.values())
         if max_ch > 512:
             channel_cap = 256
@@ -211,18 +211,18 @@ def main():
 
     # Run backbone benchmark once before the category loop
     backbone_bench = None
-    if METHOD.lower() in ("cflow", "fastflow"):
-        extractor = build_extractor(BACKBONE_KEY, pretrained=True, device=device, out_indices=cflow_out_indices).eval()
+    if cfg.METHOD.lower() in ("cflow", "fastflow"):
+        extractor = build_extractor(cfg.BACKBONE_KEY, pretrained=True, device=device, out_indices=cflow_out_indices).eval()
         dummy_input = torch.randn(1, 3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE)
         backbone_bench = run_all_benchmarks(extractor, dummy_input, device=device)
-        print_benchmark_results(backbone_bench, label=f"Backbone ({BACKBONE_KEY})")
+        print_benchmark_results(backbone_bench, label=f"Backbone ({cfg.BACKBONE_KEY})")
         del extractor  # free memory, each category builds its own
-    elif METHOD.lower() == "stlm":
+    elif cfg.METHOD.lower() == "stlm":
         from stlm_code.mob_sam import BackboneEncoderAdapter
-        adapter = BackboneEncoderAdapter(BACKBONE_KEY, pretrained=True).eval()
+        adapter = BackboneEncoderAdapter(cfg.BACKBONE_KEY, pretrained=True).eval()
         dummy_input = torch.randn(1, 3, 1024, 1024)
         backbone_bench = run_all_benchmarks(adapter, dummy_input, device=device)
-        print_benchmark_results(backbone_bench, label=f"STLM Encoder ({BACKBONE_KEY})")
+        print_benchmark_results(backbone_bench, label=f"STLM Encoder ({cfg.BACKBONE_KEY})")
         del adapter
 
     all_results = {}
@@ -236,7 +236,7 @@ def main():
 
     # Print summary table if multiple categories were run
     if len(categories) > 1:
-        print_summary_table(all_results, METHOD, BACKBONE_KEY)
+        print_summary_table(all_results, cfg.METHOD, cfg.BACKBONE_KEY)
 
     return all_results
 
