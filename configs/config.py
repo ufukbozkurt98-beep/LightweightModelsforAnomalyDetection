@@ -15,11 +15,11 @@ NUM_WORKERS = 2
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
 #BACKBONE_KEY = "mobilenetv3_large"
 #BACKBONE_KEY = "efficientnet_lite1"
-BACKBONE_KEY = "shufflenet_g8"
-#BACKBONE_KEY = "mobilevit_s"
+#BACKBONE_KEY = "shufflenet_g8"
+BACKBONE_KEY = "mobilevit_xs"
 #BACKBONE_KEY = "mobileformer_294m"
-#METHOD = "glass"
-METHOD = "simplenet"
+METHOD = "glass"
+#METHOD = "simplenet"
 
 # Set to True to run all 15 MVTec-AD categories in a loop.
 # When True, CATEGORY above is ignored.
