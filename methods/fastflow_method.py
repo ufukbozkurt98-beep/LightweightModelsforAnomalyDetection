@@ -399,7 +399,8 @@ class FastFlowMethod:
                     metric, img_auc, pix_auc = result, None, None
                 if self.verbose:
                     if img_auc is not None:
-                        detail = f"img={img_auc:.4f}  pix={pix_auc:.4f}"
+                        combined = (img_auc + pix_auc) / 2
+                        detail = f"img={img_auc:.4f}  pix={pix_auc:.4f}  combined={combined:.4f}"
                     else:
                         detail = f"metric={metric:.4f}"
                     best_flag = "  ★ new best" if metric > self._best_metric else ""
