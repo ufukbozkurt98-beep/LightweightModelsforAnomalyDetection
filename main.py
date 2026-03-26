@@ -134,9 +134,9 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
             gauss_sigma=0.0,
             use_scheduler=False,
             channel_cap=channel_cap,
-            best_metric="pixel",  # "none" = no eval, "pixel" = anomalib default (monitor=pixel_AUROC), "combined" = (img+pix)/2
-            eval_every=1,  # anomalib validates every epoch
-            early_stopping_patience=3,  # anomalib default config: patience=3, monitor=pixel_AUROC
+            best_metric="pixel",  # "none" = no eval, "pixel" = select best epoch by pixel_AUROC, "combined" = (img+pix)/2
+            eval_every=10,  # check best epoch every 10 epochs
+            early_stopping_patience=0,  # 0=disabled, train full 500 epochs (paper doesn't use early stopping)
         )
         return metrics
     else:
