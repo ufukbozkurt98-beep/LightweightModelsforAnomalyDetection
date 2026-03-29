@@ -5,14 +5,17 @@ Runs STLM training and evaluation for a given category using original paper sett
 
 import argparse
 import gc
+import json
 import time
 import torch
 import torch.nn.functional as F
+from pathlib import Path
 from torch.utils.data import DataLoader
 from stlm_code.trainSTLM import train
 from stlm_code.constant import RESIZE_SHAPE
 from stlm_code.data.mvtec_dataset import MVTecDataset
 from stlm_code.model.model_utils import l2_norm
+from configs.config import REPORTS_DIR
 from utils.model_benchmark import (
     reset_gpu_peak, measure_gpu_memory_mb,
 )
@@ -217,4 +220,13 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
         "gpu_infer_mb": round(gpu_infer_mb, 1),
         "stlm_raw": raw,  # keep original STLM metrics for reference
     }
+
+    # Save per-category results as JSON
+    enc_label = backbone_key if backbone_key and backbone_key.lower() != "tinyvit" else "tinyvit"
+    results_dir = REPORTS_DIR / "benchmark_results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    out_path = results_dir / f"{category}_stlm_{enc_label}_results.json"
+    out_path.write_text(json.dumps(metrics, indent=2))
+    print(f"  [saved → {out_path}]")
+
     return metrics

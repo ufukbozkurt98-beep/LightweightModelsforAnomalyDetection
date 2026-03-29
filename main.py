@@ -227,7 +227,21 @@ def main():
             del adapter
 
     all_results = {}
+    # Determine the result file naming for skip-if-exists check
+    if cfg.METHOD.lower() == "stlm":
+        _enc_label = cfg.BACKBONE_KEY if cfg.BACKBONE_KEY and cfg.BACKBONE_KEY.lower() != "tinyvit" else "tinyvit"
+        _result_prefix = lambda cat: f"{cat}_stlm_{_enc_label}_results.json"
+    else:
+        _result_prefix = lambda cat: f"{cat}_{cfg.METHOD.lower()}_{cfg.BACKBONE_KEY}_results.json"
+
     for i, cat in enumerate(categories):
+        # Skip categories that already have saved results
+        result_file = REPORTS_DIR / "benchmark_results" / _result_prefix(cat)
+        if result_file.exists():
+            print(f"Skipping {cat} — already done ({result_file.name})")
+            all_results[cat] = json.loads(result_file.read_text())
+            continue
+
         print(f"\n{'#'*80}")
         print(f"  [{i+1}/{len(categories)}] Category: {cat}")
         print(f"{'#'*80}\n")
