@@ -218,12 +218,13 @@ def main():
         print_benchmark_results(backbone_bench, label=f"Backbone ({cfg.BACKBONE_KEY})")
         del extractor  # free memory, each category builds its own
     elif cfg.METHOD.lower() == "stlm":
-        from stlm_code.mob_sam import BackboneEncoderAdapter
-        adapter = BackboneEncoderAdapter(cfg.BACKBONE_KEY, pretrained=True).eval()
-        dummy_input = torch.randn(1, 3, 1024, 1024)
-        backbone_bench = run_all_benchmarks(adapter, dummy_input, device=device)
-        print_benchmark_results(backbone_bench, label=f"STLM Encoder ({cfg.BACKBONE_KEY})")
-        del adapter
+        if cfg.BACKBONE_KEY is not None and cfg.BACKBONE_KEY.lower() != "tinyvit":
+            from stlm_code.mob_sam import BackboneEncoderAdapter
+            adapter = BackboneEncoderAdapter(cfg.BACKBONE_KEY, pretrained=True).eval()
+            dummy_input = torch.randn(1, 3, 1024, 1024)
+            backbone_bench = run_all_benchmarks(adapter, dummy_input, device=device)
+            print_benchmark_results(backbone_bench, label=f"STLM Encoder ({cfg.BACKBONE_KEY})")
+            del adapter
 
     all_results = {}
     for i, cat in enumerate(categories):

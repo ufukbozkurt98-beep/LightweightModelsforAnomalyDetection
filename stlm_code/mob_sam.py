@@ -83,7 +83,7 @@ def _build_encoder(backbone_key, device):
             mlp_ratio=4.,
             drop_rate=0.,
             drop_path_rate=0.0,
-            use_checkpoint=True,
+            use_checkpoint=False,
             mbconv_expand_ratio=4.0,
             local_conv_size=3,
             layer_lr_decay=0.8,

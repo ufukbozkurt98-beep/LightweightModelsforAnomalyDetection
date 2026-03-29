@@ -4,6 +4,7 @@ Runs STLM training and evaluation for a given category using original paper sett
 """
 
 import argparse
+import gc
 import time
 import torch
 import torch.nn.functional as F
@@ -169,6 +170,12 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
             random_rotate=random_rotate, backbone_key=backbone_key
         )
         gpu_train_mb = 0.0
+
+    # Free teacher memory before inference measurement (teacher is a local in train(),
+    # now out of scope, but CUDA cache may still hold it)
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     # Inference benchmark (student + SegNet only, no teacher needed)
     print(f"  Measuring inference latency on test set...")
