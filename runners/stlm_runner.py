@@ -20,7 +20,6 @@ from utils.model_benchmark import (
     reset_gpu_peak, measure_gpu_memory_mb,
 )
 
-
 def _measure_stlm_inference(args, category, twostream, segmentation_net, device):
     """Run a timed inference pass over the test set (student + SegNet only, no teacher).
 
