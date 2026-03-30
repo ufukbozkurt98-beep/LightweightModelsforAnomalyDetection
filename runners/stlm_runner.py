@@ -209,16 +209,23 @@ def run_stlm(category, mvtec_path="./data/MVTec-AD/", dtd_path="./data/dtd/image
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    # Convert STLM raw metrics from CUDA tensors to plain Python floats
+    def _to_float(v):
+        if isinstance(v, torch.Tensor):
+            return round(float(v.cpu()), 4)
+        return v
+    raw_serializable = {k: _to_float(v) for k, v in raw.items()}
+
     # Normalize metric keys to match project's print_summary_table() format
     metrics = {
-        "image_auroc": raw.get("auc_detect_fa", 0),
-        "pixel_auroc": raw.get("auc_fa", 0),
-        "aupro_0.3": raw.get("aupro_fa", 0),
+        "image_auroc": _to_float(raw.get("auc_detect_fa", 0)),
+        "pixel_auroc": _to_float(raw.get("auc_fa", 0)),
+        "aupro_0.3": _to_float(raw.get("aupro_fa", 0)),
         "inference_benchmark": inference_bench,
         "backbone_benchmark": backbone_bench,
         "gpu_train_mb": round(gpu_train_mb, 1),
         "gpu_infer_mb": round(gpu_infer_mb, 1),
-        "stlm_raw": raw,  # keep original STLM metrics for reference
+        "stlm_raw": raw_serializable,  # keep original STLM metrics for reference
     }
 
     # Save per-category results as JSON
