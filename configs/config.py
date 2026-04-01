@@ -4,7 +4,7 @@ from pathlib import Path
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-CATEGORY = "zipper" #all
+CATEGORY = "bottle" #all
 VAL_RATIO = 0.2
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
@@ -19,7 +19,7 @@ BACKBONE_KEY = "mobilenetv3_large"  # active backbone
 #BACKBONE_KEY = "mobilenetv3_small"
 #BACKBONE_KEY = "shufflenet_g3"
 #BACKBONE_KEY = "mobilevit_xs"
-#BACKBONE_KEY = "efficientnet_lite1"
+BACKBONE_KEY = "efficientnet_lite1"
 #BACKBONE_KEY = "shufflenet_g1"  # ShuffleNet V1 g=1: baseline (144/288/576 ch)
 #BACKBONE_KEY = "shufflenet_g3"  # ShuffleNet V1 g=3: paper's default (240/480/960 ch)
 #BACKBONE_KEY = "shufflenet_g8"  # ShuffleNet V1 g=8: most aggressive (384/768/1536 ch)
