@@ -268,46 +268,5 @@ def main():
     return all_results
 
 
-def main():
-    data_root = ensure_extracted(TAR_PATH, str(MVTEC_ROOT))
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    if RUN_ALL:
-        # ── loop over every category ──────────────────────────────────────────
-        for cat in ALL_CATEGORIES:
-            result_file = REPORTS_DIR / "benchmark_results" / f"{cat}_{METHOD.lower()}_{BACKBONE_KEY}_results.json"
-            if result_file.exists():
-                print(f"Skipping {cat} — already done")
-                continue
-            print(f"\n{'='*60}")
-            print(f"  Running {METHOD.upper()} on: {cat.upper()}")
-            print(f"{'='*60}\n")
-            run_one_category(cat, data_root)
-
-    else:
-        # ── original single-category behaviour, nothing changed ───────────────
-        scan_and_split(
-            mvtec_root=Path(data_root),
-            out_dir=REPORTS_DIR,
-            category=CATEGORY,
-            val_ratio=VAL_RATIO,
-            seed=SEED,
-        )
-
-        train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON,
-                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
-        val_loader   = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val",   SPLIT_JSON,
-                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
-        test_loader  = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test",  SPLIT_JSON,
-                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
-
-        if METHOD.lower() == "glass":
-            run_glass(train_loader, val_loader, test_loader, category=CATEGORY)
-        elif METHOD.lower() == "simplenet":
-            run_simplenet(train_loader, val_loader, test_loader, category=CATEGORY)
-        else:
-            raise ValueError(f"Unknown METHOD: {METHOD}")
-
-
 if __name__ == "__main__":
     main()
