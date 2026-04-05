@@ -1,31 +1,25 @@
+import json
+from pathlib import Path
+
+import torch
+
+import configs.config as cfg
+from configs.config import (
+    MVTEC_ROOT, REPORTS_DIR, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE,
+    SPLIT_JSON, TAR_PATH, VAL_RATIO_CFLOW, DTD_ZIP_PATH, DTD_ROOT,
+    CATEGORY, BACKBONE_KEY, METHOD, RUN_ALL,
+)
 
 from runners.glass_runner import run_glass
 from runners.simplenet_runner import run_simplenet
 from runners.cflow_runner import run_cflow
 from runners.fastflow_runner import run_fastflow
 
-# from glass_src.glass import GLASS  # import the GLASS object from the glass.py file of glass_src package
-# --------------------------------
-import json
-from pathlib import Path  # to enable to use path objects and /|\ handling
-#from glass_src.glass import GLASS
-from utils.glass_backbone_adapter import GlassBackboneAdapter
-from utils.glass_loader_adapter import GlassLoaderAdapter
-from pathlib import Path
-
-from configs.config import (
-    MVTEC_ROOT, REPORTS_DIR, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, VAL_RATIO_CFLOW,
-    DTD_ZIP_PATH, DTD_ROOT, CATEGORY, BACKBONE_KEY, METHOD, RUN_ALL
-)
-
 from utils.mvtec_extract import ensure_extracted
 from utils.data_check_and_split import scan_and_split
 from utils.data_loader import make_loader_mvtec_ad
-
-import torch
-
-import configs.config as cfg
-
+from utils.feature_extractor import build_extractor
+from utils.model_benchmark import run_all_benchmarks, print_benchmark_results
 
 
 ALL_MVTEC_CATEGORIES = [
@@ -33,11 +27,7 @@ ALL_MVTEC_CATEGORIES = [
     "hazelnut", "leather", "metal_nut", "pill", "screw",
     "tile", "toothbrush", "transistor", "wood", "zipper",
 ]
-ALL_CATEGORIES = [
-    "bottle", "cable", "capsule", "carpet", "grid",
-    "hazelnut", "leather", "metal_nut", "pill", "screw",
-    "tile", "toothbrush", "transistor", "wood", "zipper",
-]
+
 
 def run_single_category(category: str, data_root, device, backbone_bench=None, cflow_out_indices=None, channel_cap=None):
     """Run training and evaluation for a single MVTec AD category."""
@@ -97,10 +87,10 @@ def run_single_category(category: str, data_root, device, backbone_bench=None, c
                                        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
 
     if cfg.METHOD.lower() == "glass":
-        run_glass(train_loader, val_loader, test_loader, category = category)
+        run_glass(train_loader, val_loader, test_loader, category=category)
         return None
     elif cfg.METHOD.lower() == "simplenet":
-        run_simplenet(train_loader, val_loader, test_loader, category = category)
+        run_simplenet(train_loader, val_loader, test_loader, category=category)
         return None
     elif cfg.METHOD.lower() == "cflow":
         scores, maps, metrics = run_cflow(
@@ -143,8 +133,8 @@ def run_single_category(category: str, data_root, device, backbone_bench=None, c
             use_scheduler=True,
             channel_cap=channel_cap,
             best_metric="combined",  # "none" = no eval, "pixel" = select best epoch by pixel_AUROC, "combined" = (img+pix)/2
-            eval_every=1,  # check best epoch every 10 epochs
-            early_stopping_patience=25,  # 0=disabled, train full 500 epochs (paper doesn't use early stopping)
+            eval_every=1,
+            early_stopping_patience=25,  # 0=disabled, train full 500 epochs
         )
         return metrics
     else:
@@ -186,21 +176,13 @@ def print_summary_table(all_results, method, backbone):
 
 
 def main():
-    from utils.feature_extractor import build_extractor
-    from utils.model_benchmark import run_all_benchmarks, print_benchmark_results
-
-    tar_path = TAR_PATH
-    data_root = ensure_extracted(tar_path, str(MVTEC_ROOT))
+    data_root = ensure_extracted(TAR_PATH, str(MVTEC_ROOT))
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Determine categories to run
     if cfg.CATEGORY.lower() == "all":
         categories = ALL_MVTEC_CATEGORIES
-    if METHOD.lower() == "glass":
-        run_glass(train_loader, val_loader, test_loader, category=category)
-    elif METHOD.lower() == "simplenet":
-        run_simplenet(train_loader, val_loader, test_loader, category=category)
     else:
         categories = [cfg.CATEGORY]
 
@@ -213,8 +195,7 @@ def main():
     # Adds a 1x1 conv to reduce channels before the normalizing flow.
     channel_cap = None
     if cfg.METHOD.lower() in ("cflow", "fastflow"):
-        from utils.feature_extractor import build_extractor as _be
-        _tmp = _be(cfg.BACKBONE_KEY, pretrained=False)
+        _tmp = build_extractor(cfg.BACKBONE_KEY, pretrained=False)
         max_ch = max(_tmp.feature_channels.values())
         if max_ch > 512:
             channel_cap = 256
@@ -258,7 +239,12 @@ def main():
         print(f"  [{i+1}/{len(categories)}] Category: {cat}")
         print(f"{'#'*80}\n")
 
-        metrics = run_single_category(cat, data_root, device, backbone_bench=backbone_bench, cflow_out_indices=cflow_out_indices, channel_cap=channel_cap)
+        metrics = run_single_category(
+            cat, data_root, device,
+            backbone_bench=backbone_bench,
+            cflow_out_indices=cflow_out_indices,
+            channel_cap=channel_cap,
+        )
         all_results[cat] = metrics
 
     # Print summary table if multiple categories were run
@@ -266,47 +252,6 @@ def main():
         print_summary_table(all_results, cfg.METHOD, cfg.BACKBONE_KEY)
 
     return all_results
-
-
-def main():
-    data_root = ensure_extracted(TAR_PATH, str(MVTEC_ROOT))
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    if RUN_ALL:
-        # ── loop over every category ──────────────────────────────────────────
-        for cat in ALL_CATEGORIES:
-            result_file = REPORTS_DIR / "benchmark_results" / f"{cat}_{METHOD.lower()}_{BACKBONE_KEY}_results.json"
-            if result_file.exists():
-                print(f"Skipping {cat} — already done")
-                continue
-            print(f"\n{'='*60}")
-            print(f"  Running {METHOD.upper()} on: {cat.upper()}")
-            print(f"{'='*60}\n")
-            run_one_category(cat, data_root)
-
-    else:
-        # ── original single-category behaviour, nothing changed ───────────────
-        scan_and_split(
-            mvtec_root=Path(data_root),
-            out_dir=REPORTS_DIR,
-            category=CATEGORY,
-            val_ratio=VAL_RATIO,
-            seed=SEED,
-        )
-
-        train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON,
-                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
-        val_loader   = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val",   SPLIT_JSON,
-                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
-        test_loader  = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test",  SPLIT_JSON,
-                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
-
-        if METHOD.lower() == "glass":
-            run_glass(train_loader, val_loader, test_loader, category=CATEGORY)
-        elif METHOD.lower() == "simplenet":
-            run_simplenet(train_loader, val_loader, test_loader, category=CATEGORY)
-        else:
-            raise ValueError(f"Unknown METHOD: {METHOD}")
 
 
 if __name__ == "__main__":
