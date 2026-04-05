@@ -1,0 +1,14 @@
+{
+  "category": "hazelnut",
+  "counts": {
+    "train_good": 391,
+    "test_good": 40,
+    "test_anomaly": 70
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

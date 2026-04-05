@@ -8,10 +8,14 @@ from runners.fastflow_runner import run_fastflow
 # --------------------------------
 import json
 from pathlib import Path  # to enable to use path objects and /|\ handling
+#from glass_src.glass import GLASS
+from utils.glass_backbone_adapter import GlassBackboneAdapter
+from utils.glass_loader_adapter import GlassLoaderAdapter
+from pathlib import Path
 
 from configs.config import (
     MVTEC_ROOT, REPORTS_DIR, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, VAL_RATIO_CFLOW,
-    DTD_ZIP_PATH, DTD_ROOT
+    DTD_ZIP_PATH, DTD_ROOT, CATEGORY, BACKBONE_KEY, METHOD, RUN_ALL
 )
 
 from utils.mvtec_extract import ensure_extracted
@@ -29,9 +33,13 @@ ALL_MVTEC_CATEGORIES = [
     "hazelnut", "leather", "metal_nut", "pill", "screw",
     "tile", "toothbrush", "transistor", "wood", "zipper",
 ]
+ALL_CATEGORIES = [
+    "bottle", "cable", "capsule", "carpet", "grid",
+    "hazelnut", "leather", "metal_nut", "pill", "screw",
+    "tile", "toothbrush", "transistor", "wood", "zipper",
+]
 
-
-def run_single_category(category, data_root, device, backbone_bench=None, cflow_out_indices=None, channel_cap=None):
+def run_single_category(category: str, data_root, device, backbone_bench=None, cflow_out_indices=None, channel_cap=None):
     """Run training and evaluation for a single MVTec AD category."""
     split_json = REPORTS_DIR / f"mvtec_{category}_split.json"
 
@@ -89,10 +97,10 @@ def run_single_category(category, data_root, device, backbone_bench=None, cflow_
                                        input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
 
     if cfg.METHOD.lower() == "glass":
-        run_glass(train_loader, val_loader, test_loader)
+        run_glass(train_loader, val_loader, test_loader, category = category)
         return None
     elif cfg.METHOD.lower() == "simplenet":
-        run_simplenet(train_loader, val_loader, test_loader)
+        run_simplenet(train_loader, val_loader, test_loader, category = category)
         return None
     elif cfg.METHOD.lower() == "cflow":
         scores, maps, metrics = run_cflow(
@@ -189,6 +197,10 @@ def main():
     # Determine categories to run
     if cfg.CATEGORY.lower() == "all":
         categories = ALL_MVTEC_CATEGORIES
+    if METHOD.lower() == "glass":
+        run_glass(train_loader, val_loader, test_loader, category=category)
+    elif METHOD.lower() == "simplenet":
+        run_simplenet(train_loader, val_loader, test_loader, category=category)
     else:
         categories = [cfg.CATEGORY]
 
@@ -254,6 +266,47 @@ def main():
         print_summary_table(all_results, cfg.METHOD, cfg.BACKBONE_KEY)
 
     return all_results
+
+
+def main():
+    data_root = ensure_extracted(TAR_PATH, str(MVTEC_ROOT))
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if RUN_ALL:
+        # ── loop over every category ──────────────────────────────────────────
+        for cat in ALL_CATEGORIES:
+            result_file = REPORTS_DIR / "benchmark_results" / f"{cat}_{METHOD.lower()}_{BACKBONE_KEY}_results.json"
+            if result_file.exists():
+                print(f"Skipping {cat} — already done")
+                continue
+            print(f"\n{'='*60}")
+            print(f"  Running {METHOD.upper()} on: {cat.upper()}")
+            print(f"{'='*60}\n")
+            run_one_category(cat, data_root)
+
+    else:
+        # ── original single-category behaviour, nothing changed ───────────────
+        scan_and_split(
+            mvtec_root=Path(data_root),
+            out_dir=REPORTS_DIR,
+            category=CATEGORY,
+            val_ratio=VAL_RATIO,
+            seed=SEED,
+        )
+
+        train_loader = make_loader_mvtec_ad(Path(data_root), CATEGORY, "train", SPLIT_JSON,
+                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
+        val_loader   = make_loader_mvtec_ad(Path(data_root), CATEGORY, "val",   SPLIT_JSON,
+                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
+        test_loader  = make_loader_mvtec_ad(Path(data_root), CATEGORY, "test",  SPLIT_JSON,
+                                            input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
+
+        if METHOD.lower() == "glass":
+            run_glass(train_loader, val_loader, test_loader, category=CATEGORY)
+        elif METHOD.lower() == "simplenet":
+            run_simplenet(train_loader, val_loader, test_loader, category=CATEGORY)
+        else:
+            raise ValueError(f"Unknown METHOD: {METHOD}")
 
 
 if __name__ == "__main__":

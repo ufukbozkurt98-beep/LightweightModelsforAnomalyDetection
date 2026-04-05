@@ -1,14 +1,16 @@
 # configs/config.py
 from pathlib import Path
+import os
 
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
+DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
 CATEGORY = "screw" #all
-VAL_RATIO = 0.2
+VAL_RATIO = 0.0
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
-BATCH_SIZE = 32
+BATCH_SIZE = 32 # Depends on the method
 IMAGE_INPUT_SIZE = 256
 SPLIT_JSON = REPORTS_DIR / f"mvtec_{CATEGORY}_split.json" # path object pointing to split file of the category
 NUM_WORKERS = 4
@@ -29,3 +31,4 @@ BACKBONE_KEY = "mobilevit_xs"
 #METHOD = "fastflow"
 #METHOD = "simplenet"
 METHOD = "stlm"
+RUN_ALL = True

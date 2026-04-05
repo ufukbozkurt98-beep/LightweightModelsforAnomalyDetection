@@ -20,8 +20,21 @@ from configs.config import BACKBONE_KEY
 
 # from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
+import shutil
+from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb, measure_inference_latency
 
-def run_simplenet(train_loader, val_loader, test_loader):
+import json
+from pathlib import Path
+
+def run_simplenet(train_loader, val_loader, test_loader, category=None):
+
+    if category is None:
+        category = CATEGORY
+
+    checkpoint_dir = REPORTS_DIR / "simplenet_runs" / category
+    if checkpoint_dir.exists():
+        shutil.rmtree(checkpoint_dir)
+    
     # for simplenet
     train_ds = SimpleNetDatasetAdapter(train_loader.dataset)
     val_ds = SimpleNetDatasetAdapter(val_loader.dataset)
@@ -55,18 +68,11 @@ def run_simplenet(train_loader, val_loader, test_loader):
         drop_last=getattr(test_loader, "drop_last", False),
     )
 
-    print(len(val_loader.dataset))
-    b = next(iter(train_loader))
-    print("TRAIN shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-
-    b = next(iter(val_loader))
-    print("VALIDATION shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
-
     b = next(iter(test_loader))
     print("TEST  shapes:", b["image"].shape, b["mask"].shape, "labels:", b["label"].unique().tolist())
     print("TEST defect types sample:", b["defect_type"][:4])
 
-    # -------- mobilev3net stuff ------
+    # -------- lightweight stuff ------
     # get a batch to do mask check
     b = next(iter(test_loader))
     mask_sums = b["mask"].sum(dim=(1, 2, 3))
@@ -82,6 +88,8 @@ def run_simplenet(train_loader, val_loader, test_loader):
     with torch.no_grad():
         feats = extractor(b["image"].to(device))
     print({k: tuple(v.shape) for k, v in feats.items()})
+    for k, v in feats.items():
+        print(f"{k}: mean={v.mean():.4f}, std={v.std():.4f}")
 
     b = next(iter(test_loader))
     print(b.keys())
@@ -111,25 +119,67 @@ def run_simplenet(train_loader, val_loader, test_loader):
     sn = SimpleNet(device)
     sn.load(
         backbone=extractor,
-        # layers_to_extract_from=["l1", "l2", "l3"],
-        layers_to_extract_from=["l2", "l3"],
+        layers_to_extract_from=["l1", "l2", "l3"],
+        #layers_to_extract_from=["l2", "l3"],
         device=device,
         input_shape=[3, IMAGE_INPUT_SIZE, IMAGE_INPUT_SIZE],
-        pretrain_embed_dimension=1536,
-        target_embed_dimension=1536,
+        pretrain_embed_dimension=256,
+        target_embed_dimension=256,
         patchsize=3,
         patchstride=1,
-        meta_epochs=200,
+        meta_epochs=40,
         gan_epochs=4,
         aed_meta_epochs=1,
         dsc_layers=2,
         dsc_hidden=1024,
         train_backbone=False,
-        noise_std=0.015,  # to match the paper's parameters
+        noise_std=0.3,
+        dsc_lr=0.0001,       
+        lr=0.0001,           
+        dsc_margin=0.5,      
     )
 
-    sn.set_model_dir(str(REPORTS_DIR / "simplenet_runs"), CATEGORY)
+    sn.set_model_dir(str(REPORTS_DIR / "simplenet_runs"), category)
 
     # Train and evaluate
+    reset_gpu_peak(device)
     best = sn.train(train_loader, test_loader)
-    print("Best record:", best)
+    gpu_train_mb = measure_gpu_memory_mb(device)
+
+    # Inference latency
+    reset_gpu_peak(device)
+    latency, _ = measure_inference_latency(sn.predict, test_loader, device=str(device))
+    gpu_infer_mb = measure_gpu_memory_mb(device)
+
+    # Print everything together in one block
+    print(f"\n{'='*55}")
+    print(f"  PER-CATEGORY BENCHMARK: {category.upper()}")
+    print(f"{'='*55}")
+    print(f"  Best I-AUROC : {best[0]:.4f}")
+    print(f"  Best P-AUROC : {best[1]:.4f}")
+    print(f"  Best PRO     : {best[2]:.4f}")
+    print(f"  GPU (train)  : {gpu_train_mb:.0f} MB")
+    print(f"  GPU (infer)  : {gpu_infer_mb:.0f} MB")
+    print(f"  Infer total  : {latency['total_time_s']:.3f} s")
+    print(f"  Infer/image  : {latency['per_image_ms']:.2f} ms")
+    print(f"  Throughput   : {latency['throughput_fps']:.1f} FPS")
+    print(f"{'='*55}\n")
+
+    results_dir = REPORTS_DIR / "benchmark_results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    category_result = {
+        "category"       : category,
+        "i_auroc"        : round(float(best[0]), 4),
+        "p_auroc"        : round(float(best[1]), 4),
+        "pro"            : round(float(best[2]), 4),
+        "gpu_train_mb"   : round(gpu_train_mb, 1),
+        "gpu_infer_mb"   : round(gpu_infer_mb, 1),
+        "infer_total_s"  : latency["total_time_s"],
+        "infer_per_img_ms": latency["per_image_ms"],
+        "throughput_fps" : latency["throughput_fps"],
+    }
+
+    out_path = results_dir / f"{category}_results.json"
+    out_path.write_text(json.dumps(category_result, indent=2))
+    print(f"  [saved → {out_path}]")
