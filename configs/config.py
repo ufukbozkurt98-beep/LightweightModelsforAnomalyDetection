@@ -6,7 +6,7 @@ import os
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
 DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
-CATEGORY = "all" #all
+CATEGORY = "bottle" #all
 VAL_RATIO = 0.0
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
@@ -20,15 +20,15 @@ DTD_ROOT = Path("./data/dtd")  # extracted DTD root
 #BACKBONE_KEY = "mobilenetv3_large"  # active backbone
 #BACKBONE_KEY = "mobilenetv3_small"
 #BACKBONE_KEY = "shufflenet_g3"
-#BACKBONE_KEY = "mobilevit_xs"
+BACKBONE_KEY = "mobilevit_xs"
 #BACKBONE_KEY = "efficientnet_lite1"
 #BACKBONE_KEY = "shufflenet_g1"  # ShuffleNet V1 g=1: baseline (144/288/576 ch)
 #BACKBONE_KEY = "shufflenet_g3"  # ShuffleNet V1 g=3: paper's default (240/480/960 ch)
 #BACKBONE_KEY = "shufflenet_g8"  # ShuffleNet V1 g=8: most aggressive (384/768/1536 ch)
 #BACKBONE_KEY = "mobileformer_508m"  # MobileFormer 508M FLOPs (14.0M params)
-BACKBONE_KEY = "mobileformer_294m"  # MobileFormer 294M FLOPs (11.4M params)
+#BACKBONE_KEY = "mobileformer_294m"  # MobileFormer 294M FLOPs (11.4M params)
 #BACKBONE_KEY = "mobileformer_52m"   # MobileFormer 52M FLOPs (3.5M params)
 #METHOD = "fastflow"
-METHOD = "simplenet"
+METHOD = "glass"
 #METHOD = "stlm"
-RUN_ALL = True
+RUN_ALL = False
