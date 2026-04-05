@@ -180,6 +180,6 @@ def run_simplenet(train_loader, val_loader, test_loader, category=None):
         "throughput_fps" : latency["throughput_fps"],
     }
 
-    out_path = results_dir / f"{category}_results.json"
+    out_path = results_dir / f"{category}_simplenet_{BACKBONE_KEY}_results.json"
     out_path.write_text(json.dumps(category_result, indent=2))
     print(f"  [saved → {out_path}]")
