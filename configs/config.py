@@ -1,18 +1,28 @@
 # configs/config.py
 from pathlib import Path
+import os
 
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
-CATEGORY = "bottle"
-VAL_RATIO = 0.2
-VAL_RATIO_CFLOW = 0.0
+DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
+CATEGORY = "wood"
+VAL_RATIO = 0.0
 SEED = 42
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 IMAGE_INPUT_SIZE = 256
 SPLIT_JSON = REPORTS_DIR / f"mvtec_{CATEGORY}_split.json" # path object pointing to split file of the category
 NUM_WORKERS = 2
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
-BACKBONE_KEY = "mobilenetv3_small"
-METHOD = "cflow"
+#BACKBONE_KEY = "mobilenetv3_large"
+#BACKBONE_KEY = "efficientnet_lite1"
+#BACKBONE_KEY = "shufflenet_g8"
+#BACKBONE_KEY = "mobilevit_xs"
+BACKBONE_KEY = "mobileformer_294m"
+METHOD = "glass"
 #METHOD = "simplenet"
-#METHOD = "cflow"
+
+# Set to True to run all 15 MVTec-AD categories in a loop.
+# When True, CATEGORY above is ignored.
+RUN_ALL = True
+
+

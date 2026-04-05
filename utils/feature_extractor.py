@@ -31,6 +31,14 @@ LIGHTWEIGHT_BACKBONES: Dict[str, BackboneSpec] = {
     "mobilevit_xs": BackboneSpec(source="timm", name="mobilevit_xs", out_indices=(1, 2, 3)),
     "mobilevit_s": BackboneSpec(source="timm", name="mobilevit_s", out_indices=(1, 2, 3)),
 
+    # ShuffleNet V1 (official Megvii implementation)
+    "shufflenet_g3": BackboneSpec(source="custom_shufflenet", name="shufflenet_g3"),
+    "shufflenet_g8": BackboneSpec(source="custom_shufflenet", name="shufflenet_g8"),
+
+    # MobileFormer (CVPR 2022)
+    "mobileformer_508m": BackboneSpec(source="custom_mobileformer", name="mobileformer_508m"),
+    "mobileformer_294m": BackboneSpec(source="custom_mobileformer", name="mobileformer_294m"),
+    "mobileformer_52m": BackboneSpec(source="custom_mobileformer", name="mobileformer_52m"),
 }
 
 
@@ -44,6 +52,7 @@ class MultiScaleFeatureExtractor(nn.Module):
         *,
         pretrained: bool = True,
         device: Optional[torch.device] = None,
+        tap_offset: int = 0,
     ) -> None:
         super().__init__()
         self.spec = spec
@@ -52,6 +61,10 @@ class MultiScaleFeatureExtractor(nn.Module):
         # For different model other libraries or implementations can be used
         if spec.source == "timm":
             self._impl = _TimmFeaturesOnly(spec.name, out_indices=spec.out_indices, pretrained=pretrained)
+        elif spec.source == "custom_shufflenet":
+            self._impl = _ShuffleNetFeaturesOnly(spec.name)
+        elif spec.source == "custom_mobileformer":
+            self._impl = _MobileFormerFeaturesOnly(spec.name, tap_offset=tap_offset)
         else:
             raise ValueError(f"Unknown backbone source: {spec.source}")
 
@@ -93,12 +106,13 @@ class _TimmFeaturesOnly(nn.Module):
         # Get feature info from timm model
         fi = getattr(self.backbone, "feature_info", None)
 
-        # feature_info contains metadata about each layer
+        # feature_info.channels() returns channel counts matching the selected out_indices,
+        # NOT all feature levels. This is important because iterating `for f in fi`
+        # yields ALL feature levels regardless of out_indices.
         if fi is not None:
             try:
-                # Extract channel counts for each layer
-                chans = [f.get("num_chs") for f in fi]
-                self.feature_channels = {f"l{i+1}": int(c) for i, c in enumerate(chans) if c is not None}
+                chans = fi.channels()  # only selected out_indices
+                self.feature_channels = {f"l{i+1}": int(c) for i, c in enumerate(chans)}
             except Exception:
                 pass
 
@@ -112,16 +126,122 @@ class _TimmFeaturesOnly(nn.Module):
         return {"l1": feats[0], "l2": feats[1], "l3": feats[2]}
 
 
+class _ShuffleNetFeaturesOnly(nn.Module):
+    """
+    Extract multi-scale features using ShuffleNet V1 (official Megvii implementation).
+    Returns {"l1", "l2", "l3"} from stage2, stage3, stage4.
+
+    Pretrained ImageNet weights (official, from Megvii/Face++ paper authors, MIT license)
+    are loaded automatically if the checkpoint file exists in weights/ directory.
+
+    Download from: https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo
+    Source: https://github.com/megvii-model/ShuffleNet-Series (MIT license)
+    """
+
+    # Map of model name -> (group, model_size, weight filename or None)
+    _CONFIGS = {
+        "shufflenet_g3":  (3, "1.0x", "shufflenet_g3.pth.tar"),
+        "shufflenet_g8":  (8, "1.0x", "shufflenet_g8.pth.tar"),
+    }
+
+    def __init__(self, model_name: str) -> None:
+        super().__init__()
+        from pathlib import Path
+        from utils.shufflenet import ShuffleNetV1, load_pretrained_shufflenet
+
+        if model_name not in self._CONFIGS:
+            raise ValueError(
+                f"Unknown ShuffleNet config '{model_name}'. "
+                f"Available: {list(self._CONFIGS.keys())}"
+            )
+
+        group, model_size, weight_file = self._CONFIGS[model_name]
+
+        # n_class=0 disables the classifier head since we only need features
+        self.backbone = ShuffleNetV1(group=group, model_size=model_size, n_class=0)
+
+        # Load pretrained weights if checkpoint file exists
+        if weight_file is not None:
+            weight_path = Path("weights") / weight_file
+            if weight_path.exists():
+                print(f"  Loading pretrained ShuffleNet weights from {weight_path}")
+                load_pretrained_shufflenet(self.backbone, str(weight_path))
+            else:
+                print(f"  WARNING: Pretrained weights not found at {weight_path}")
+                print(f"  ShuffleNet will use random initialization.")
+                print(f"  To use pretrained weights, download from official Megvii repo:")
+                print(f"    https://1drv.ms/f/s!AgaP37NGYuEXhRfQxHRseR7eSxXo")
+                print(f"  and save the {model_size} g={group} checkpoint as: {weight_path}")
+
+        # Store feature channel counts for each level (indices 2,3,4 = stage2,3,4)
+        self.feature_channels = {
+            f"l{i+1}": self.backbone.stage_out_channels[i + 2]
+            for i in range(3)
+        }
+
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        return self.backbone.forward_features(x)
+
+
+class _MobileFormerFeaturesOnly(nn.Module):
+    """
+    Extract multi-scale features using MobileFormer (CVPR 2022).
+    Returns {"l1", "l2", "l3"} from the first three stride-2 stages.
+    Pretrained ImageNet weights from the official repo.
+    """
+
+    _CONFIGS = {
+        "mobileformer_508m",
+        "mobileformer_294m",
+        "mobileformer_52m",
+    }
+
+    def __init__(self, model_name: str, tap_offset: int = 0) -> None:
+        super().__init__()
+        from utils.mobileformer.mobile_former import _build_mobile_former
+
+        if model_name not in self._CONFIGS:
+            raise ValueError(
+                f"Unknown MobileFormer config '{model_name}'. "
+                f"Available: {sorted(self._CONFIGS)}"
+            )
+
+        # Always loads pretrained weights
+        self.backbone = _build_mobile_former(model_name)
+        if tap_offset > 0:
+            self.backbone.set_tap_offset(tap_offset)
+
+        # Store feature channel counts for each level
+        self.feature_channels = {
+            f"l{i+1}": c for i, c in enumerate(self.backbone.stage_out_channels)
+        }
+
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        return self.backbone.forward_features(x)
+
+
 def build_extractor(
     # create a feature extractor.
     backbone_key: str,
     *,
     pretrained: bool = True,
     device: Optional[torch.device] = None,
+    out_indices: Optional[Tuple[int, int, int]] = None,
 ) -> MultiScaleFeatureExtractor:
 
     if backbone_key not in LIGHTWEIGHT_BACKBONES:
         raise KeyError(
             f"Unknown backbone '{backbone_key}'. Available: {sorted(LIGHTWEIGHT_BACKBONES.keys())}"
         )
-    return MultiScaleFeatureExtractor(LIGHTWEIGHT_BACKBONES[backbone_key], pretrained=pretrained, device=device)
+    spec = LIGHTWEIGHT_BACKBONES[backbone_key]
+    tap_offset = 0
+    # Allow method-specific override of out_indices
+    # e.g. CFlow-AD original uses (2,3,4) to match paper's feature[-11,-5,-2] layers
+    if out_indices is not None:
+        if spec.source == "timm":
+            from dataclasses import replace
+            spec = replace(spec, out_indices=out_indices)
+        elif spec.source == "custom_mobileformer":
+            # out_indices=(2,3,4) means "use deeper features" → tap_offset=1
+            tap_offset = out_indices[0] - 1  # (2,3,4) → offset 1; (1,2,3) → offset 0
+    return MultiScaleFeatureExtractor(spec, pretrained=pretrained, device=device, tap_offset=tap_offset)

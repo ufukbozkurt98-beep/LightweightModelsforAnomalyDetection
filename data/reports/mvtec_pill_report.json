@@ -1,0 +1,14 @@
+{
+  "category": "pill",
+  "counts": {
+    "train_good": 267,
+    "test_good": 26,
+    "test_anomaly": 141
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

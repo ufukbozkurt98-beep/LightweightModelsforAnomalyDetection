@@ -1,0 +1,14 @@
+{
+  "category": "grid",
+  "counts": {
+    "train_good": 264,
+    "test_good": 21,
+    "test_anomaly": 57
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}

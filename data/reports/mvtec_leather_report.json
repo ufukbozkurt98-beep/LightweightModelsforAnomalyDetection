@@ -1,0 +1,14 @@
+{
+  "category": "leather",
+  "counts": {
+    "train_good": 245,
+    "test_good": 32,
+    "test_anomaly": 92
+  },
+  "issues": {
+    "unreadable_images": [],
+    "missing_masks": [],
+    "unreadable_masks": [],
+    "mask_size_mismatch": []
+  }
+}
