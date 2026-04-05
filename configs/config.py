@@ -6,7 +6,7 @@ import os
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
 DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
-CATEGORY = "screw" #all
+CATEGORY = "hazelnut" #all
 VAL_RATIO = 0.0
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
