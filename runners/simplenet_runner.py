@@ -18,7 +18,7 @@ from utils.feature_extractor import build_extractor
 
 from configs.config import BACKBONE_KEY
 
-from simplenet_code.simplenet_author.simplenet import SimpleNet
+# from simplenet_code.simplenet_author.simplenet import SimpleNet
 from torch.utils.data import DataLoader
 import shutil
 from utils.model_benchmark import reset_gpu_peak, measure_gpu_memory_mb, measure_inference_latency
