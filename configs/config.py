@@ -6,7 +6,7 @@ import os
 MVTEC_ROOT = Path("./data/MVTec-AD")
 REPORTS_DIR = Path("./data/reports")
 DTD_PATH = Path(os.environ.get("DTD_PATH", "./data/dtd/images"))
-CATEGORY = "bottle" #all
+CATEGORY = "all" #all
 VAL_RATIO = 0.0
 VAL_RATIO_CFLOW= 0.0
 SEED = 42
@@ -17,10 +17,10 @@ NUM_WORKERS = 4
 TAR_PATH = Path("./data/mvtec_anomaly_detection.tar.xz")
 DTD_ZIP_PATH = Path("./data/dtd-r1.0.1.tar.gz")  # DTD archive (tar.gz or zip)
 DTD_ROOT = Path("./data/dtd")  # extracted DTD root
-#BACKBONE_KEY = "mobilenetv3_large"  # active backbone
+BACKBONE_KEY = "mobilenetv3_large"  # active backbone
 #BACKBONE_KEY = "mobilenetv3_small"
 #BACKBONE_KEY = "shufflenet_g3"
-BACKBONE_KEY = "mobilevit_xs"
+#BACKBONE_KEY = "mobilevit_xs"
 #BACKBONE_KEY = "efficientnet_lite1"
 #BACKBONE_KEY = "shufflenet_g1"  # ShuffleNet V1 g=1: baseline (144/288/576 ch)
 #BACKBONE_KEY = "shufflenet_g3"  # ShuffleNet V1 g=3: paper's default (240/480/960 ch)
@@ -31,4 +31,4 @@ BACKBONE_KEY = "mobilevit_xs"
 #METHOD = "fastflow"
 METHOD = "glass"
 #METHOD = "stlm"
-RUN_ALL = False
+RUN_ALL = True
