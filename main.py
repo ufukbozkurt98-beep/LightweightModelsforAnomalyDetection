@@ -8,6 +8,8 @@ from utils.glass_backbone_adapter import GlassBackboneAdapter
 from utils.glass_loader_adapter import GlassLoaderAdapter
 from pathlib import Path
 
+import torch
+
 from configs.config import (
     MVTEC_ROOT, REPORTS_DIR, CATEGORY, VAL_RATIO, SEED, IMAGE_INPUT_SIZE, BATCH_SIZE, SPLIT_JSON, TAR_PATH, BACKBONE_KEY, METHOD, RUN_ALL
 )
@@ -49,6 +51,8 @@ def run_one_category(category: str, data_root: str):
                                         input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
     test_loader  = make_loader_mvtec_ad(Path(data_root), category, "test",  split_json,
                                         input_size=IMAGE_INPUT_SIZE, batch_size=BATCH_SIZE)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if METHOD.lower() == "glass":
         run_glass(train_loader, val_loader, test_loader, category=category)
