@@ -31,4 +31,4 @@ BACKBONE_KEY = "mobilevit_xs"
 #METHOD = "fastflow"
 #METHOD = "simplenet"
 METHOD = "stlm"
-RUN_ALL = True
+RUN_ALL = False
