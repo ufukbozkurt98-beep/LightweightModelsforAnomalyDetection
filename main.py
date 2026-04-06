@@ -129,10 +129,10 @@ def run_single_category(category: str, data_root, device, backbone_bench=None, c
             backbone_bench=backbone_bench,
             # Enhancement toggles (set to False/0.0 to match vanilla anomalib)
             zero_init=False,
-            gauss_sigma=4.0,
-            use_scheduler=True,
+            gauss_sigma=0.0,
+            use_scheduler=False,
             channel_cap=channel_cap,
-            best_metric="combined",  # "none" = no eval, "pixel" = select best epoch by pixel_AUROC, "combined" = (img+pix)/2
+            best_metric="pixel",  # "none" = no eval, "pixel" = select best epoch by pixel_AUROC, "combined" = (img+pix)/2
             eval_every=1,
             early_stopping_patience=25,  # 0=disabled, train full 500 epochs
         )
