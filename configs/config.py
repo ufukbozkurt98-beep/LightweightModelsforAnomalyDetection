@@ -32,3 +32,4 @@ BACKBONE_KEY = "mobilenetv3_large"  # active backbone
 METHOD = "glass"
 #METHOD = "stlm"
 RUN_ALL = True
+USE_CHANNEL_CAP = True  # Set False to disable 1x1 conv channel reduction for NF methods

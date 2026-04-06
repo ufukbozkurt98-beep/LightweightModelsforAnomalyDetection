@@ -194,7 +194,7 @@ def main():
     # NF-based methods (CFlow, FastFlow) struggle with >256 channels per scale.
     # Adds a 1x1 conv to reduce channels before the normalizing flow.
     channel_cap = None
-    if cfg.METHOD.lower() in ("cflow", "fastflow"):
+    if getattr(cfg, "USE_CHANNEL_CAP", True) and cfg.METHOD.lower() in ("cflow", "fastflow"):
         _tmp = build_extractor(cfg.BACKBONE_KEY, pretrained=False)
         max_ch = max(_tmp.feature_channels.values())
         if max_ch > 512:
