@@ -197,7 +197,7 @@ def main():
     if getattr(cfg, "USE_CHANNEL_CAP", True) and cfg.METHOD.lower() in ("cflow", "fastflow"):
         _tmp = build_extractor(cfg.BACKBONE_KEY, pretrained=False)
         max_ch = max(_tmp.feature_channels.values())
-        if max_ch > 512:
+        if max_ch > 256:
             channel_cap = 256
             print(f"  Auto channel_cap={channel_cap} (backbone max channel={max_ch} > 512)")
         del _tmp
