@@ -1,7 +1,7 @@
 import torch
 
 
-class TupleLoader:
+class FlowTupleLoader:
     """
     Wraps a loader and always yields (image, label, mask).
     If the loader returns a dict, it is converted to this tuple format.

@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from methods.cflow_freia import load_decoder_arch, activation
 from utils.cflow_utils import train_meta_epoch, test_meta_epoch, test_meta_fps
-from utils.data_adapters import TupleLoader
+from utils.data_adapters import FlowTupleLoader
 
 
 class TimmActivationEncoder(torch.nn.Module):
@@ -154,7 +154,7 @@ class CFlowMethod:
         self._best_decoder_states = None
 
     def _build(self, train_loader):
-        image, _, _ = next(iter(TupleLoader(train_loader)))
+        image, _, _ = next(iter(FlowTupleLoader(train_loader)))
         image = image.to(self.c.device)
 
         with torch.no_grad():
@@ -196,7 +196,7 @@ class CFlowMethod:
         self._best_epoch = -1
         self._best_decoder_states = None
 
-        train_loader_t = TupleLoader(train_loader)
+        train_loader_t = FlowTupleLoader(train_loader)
 
         for epoch in range(self.c.meta_epochs):
             print("Train meta epoch: {}".format(epoch))
@@ -243,7 +243,7 @@ class CFlowMethod:
         if self.decoders is None:
             raise RuntimeError("Call fit() first.")
 
-        test_loader_t = TupleLoader(test_loader)
+        test_loader_t = FlowTupleLoader(test_loader)
 
         fps_enc, fps_all = test_meta_fps(
             self.c, 0, test_loader_t, self.encoder,
@@ -264,7 +264,7 @@ class CFlowMethod:
         if self.decoders is None:
             raise RuntimeError("Call fit() first.")
 
-        test_loader_t = TupleLoader(test_loader)
+        test_loader_t = FlowTupleLoader(test_loader)
 
         height, width, test_image_list, test_dist, gt_label_list, gt_mask_list = test_meta_epoch(
             self.c, 0, test_loader_t, self.encoder, self.decoders, self.pool_layers, self.N

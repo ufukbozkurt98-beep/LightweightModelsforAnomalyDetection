@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.data_adapters import TupleLoader
+from utils.data_adapters import FlowTupleLoader
 
 # ── anomalib-exact core (fastflow_core.py) ────────────────────────────
 from methods.fastflow_core import (
@@ -205,7 +205,7 @@ class FastFlowMethod:
     def _build(self, train_loader):
         """Run one forward pass to discover feature map shapes, then build NF blocks."""
         # Takes one batch for feature shapes we need only image
-        image, _, _ = next(iter(TupleLoader(train_loader)))
+        image, _, _ = next(iter(FlowTupleLoader(train_loader)))
         image = image.to(self.device)
 
         # Extract features without gradients (l1,l2,l3)
@@ -331,7 +331,7 @@ class FastFlowMethod:
         no_improve_count = 0  # for early stopping
 
         # Wrap loader and set modules to train mode.
-        train_loader_t = TupleLoader(train_loader)
+        train_loader_t = FlowTupleLoader(train_loader)
         self.reducers.train()
         self.norms.train()
         self.fast_flow_blocks.train()
@@ -445,7 +445,7 @@ class FastFlowMethod:
         self.norms.eval()
         self.fast_flow_blocks.eval()
 
-        test_loader_t = TupleLoader(test_loader)
+        test_loader_t = FlowTupleLoader(test_loader)
 
         all_scores = []
         all_maps = []
@@ -492,7 +492,7 @@ class FastFlowMethod:
         if self.fast_flow_blocks is None:
             raise RuntimeError("Call fit() first.")
 
-        test_loader_t = TupleLoader(test_loader)
+        test_loader_t = FlowTupleLoader(test_loader)
         use_cuda = self.device.type == "cuda"
         A = len(test_loader.dataset)
 
